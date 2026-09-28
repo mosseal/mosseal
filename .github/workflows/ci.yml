@@ -63,6 +63,22 @@ jobs:
               working-directory: fuzz
               run: cargo +nightly fuzz run open --target x86_64-unknown-linux-gnu -- -max_total_time=60
 
+    # Version lockstep (spec 06, docs/versioning.md): the root Cargo.toml
+    # `[workspace.package] version` is authoritative, and the two npm manifests
+    # plus the template Cargo.toml must agree with it. `release.mjs --check`
+    # enforces that; running it here means a PR that bumps one manifest without
+    # the others fails immediately instead of at release time.
+    version-lockstep:
+        name: version lockstep
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - name: manifests agree on one version
+              run: node scripts/release.mjs --check
+
     # Supply chain (spec 06 § supply chain): advisories, license allow-list,
     # banned crates, and trusted sources. `cargo machete` re-confirms there are
     # no unused direct dependencies (the manual audit is now enforced).
