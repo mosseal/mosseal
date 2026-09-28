@@ -52,12 +52,16 @@ jobs:
             - uses: taiki-e/install-action@v2
               with:
                   tool: cargo-fuzz
+            # `cargo fuzz` defaults its target triple to the platform it was
+            # compiled for. The prebuilt cargo-fuzz binary is musl, so it would
+            # default to x86_64-unknown-linux-musl — and ASAN cannot link against
+            # statically-linked musl libc. Pin the gnu triple explicitly.
             - name: fuzz decode (60 s)
               working-directory: fuzz
-              run: cargo +nightly fuzz run decode -- -max_total_time=60
+              run: cargo +nightly fuzz run decode --target x86_64-unknown-linux-gnu -- -max_total_time=60
             - name: fuzz open (60 s)
               working-directory: fuzz
-              run: cargo +nightly fuzz run open -- -max_total_time=60
+              run: cargo +nightly fuzz run open --target x86_64-unknown-linux-gnu -- -max_total_time=60
 
     # Supply chain (spec 06 § supply chain): advisories, license allow-list,
     # banned crates, and trusted sources. `cargo machete` re-confirms there are
