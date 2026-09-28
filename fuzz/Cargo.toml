@@ -1,0 +1,36 @@
+[package]
+name = "mosseal-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# `cargo fuzz` requires a nightly toolchain (libfuzzer + sanitizers). This crate
+# is EXCLUDED from the root workspace (see ../Cargo.toml `exclude = ["fuzz"]`)
+# so the stable `cargo test --workspace` / clippy jobs never try to build it.
+# The deterministic, stable-toolchain counterpart lives in
+# `../crates/mosseal-core/tests/fuzz_smoke.rs`.
+
+[dependencies]
+libfuzzer-sys = "0.4"
+mosseal-core = { path = "../crates/mosseal-core" }
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "open"
+path = "fuzz_targets/open.rs"
+test = false
+doc = false
+bench = false
+
+# `cargo fuzz` sets this crate up as its own workspace root (nightly-only).
+# The root workspace `exclude`s `fuzz`, so the stable CI jobs never build it.
+[workspace]

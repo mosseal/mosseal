@@ -1,0 +1,36 @@
+{
+  "name": "mosseal",
+  "version": "0.1.0",
+  "description": "CLI builder for MOSSEAL: validates env, injects secrets via Rust codegen, and compiles the per-consumer wasm (spec 05).",
+  "type": "module",
+  "bin": {
+    "mosseal": "./dist/mosseal.js"
+  },
+  "files": [
+    "dist/",
+    "template/"
+  ],
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src test",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26",
+    "oxlint": "^1.85.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "keywords": [
+    "mosseal",
+    "wasm",
+    "cryptography",
+    "share-links"
+  ],
+  "license": "MIT OR Apache-2.0"
+}

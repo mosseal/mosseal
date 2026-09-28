@@ -1,0 +1,46 @@
+{
+  "name": "@mosseal/core",
+  "version": "0.1.0",
+  "description": "TypeScript wrapper for MOSSEAL consumer-compiled wasm (spec 04). Loads wasm, handles URL fragments, mirrors the wasm error taxonomy.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src e2e",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:build": "node e2e/build-harness.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "@types/qrcode": "^1.5.6",
+    "jsqr": "^1.4.0",
+    "oxlint": "^1.85.0",
+    "qrcode": "^1.5.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "keywords": [
+    "mosseal",
+    "wasm",
+    "cryptography",
+    "share-links"
+  ],
+  "license": "MIT OR Apache-2.0"
+}

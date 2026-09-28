@@ -1,0 +1,82 @@
+# cargo-deny configuration (spec 06 § supply chain, PLAN §N3).
+#
+# Checks the resolved dependency graph for:
+#   - advisories: known security vulnerabilities (RustSec DB)
+#   - bans:       crates we never want (duplicate/legacy versions we've moved off)
+#   - licenses:   only the licenses we actually accept
+#   - sources:    crates.io only (no git/path deps leaking into releases)
+#
+# Run locally with `cargo deny check` (install: `cargo install cargo-deny`).
+
+[graph]
+# Evaluate the whole workspace, including dev/build deps, so a vulnerable or
+# wrongly-licensed test-only crate is still surfaced.
+all-features = true
+
+[advisories]
+# Deny (not warn) on vulnerabilities and unmaintained crates; the job is a gate.
+version = 2
+yanked = "deny"
+ignore = [
+    # Add `{ id = "RUSTSEC-XXXX-YYYY", reason = "..." }` entries here only with
+    # a written justification and a tracking issue.
+]
+
+[licenses]
+version = 2
+# Only licenses compatible with shipping MIT OR Apache-2.0 crates. The list is
+# the exact set present in the resolved graph today; a new license must be
+# reviewed deliberately rather than silently accepted.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Unlicense",
+    # Appears only in an OR-expression alongside MIT/Apache-2.0 (the MIT branch
+    # is what we rely on); listed so the expression resolves cleanly.
+    "LGPL-2.1-or-later",
+]
+# Some crates declare `Apache-2.0/MIT` (slash = AND in old cargo syntax); treat
+# it as the disjunction cargo-deny sees.
+confidence-threshold = 0.9
+
+[bans]
+# A duplicate crate version is usually fine, but flag multiple major versions of
+# the crypto/randomness stack we care about (PLAN § Dependency policy).
+multiple-versions = "warn"
+# Workspace-internal path deps (`mosseal-core = { path = "../mosseal-core" }`)
+# carry no version by design, and cargo-deny's `allow-wildcard-paths` only
+# exempts private crates. Warn (not deny) so a wildcard in an *external* dep is
+# still visible in the job log without failing on the intentional workspace ones.
+wildcards = "warn"
+deny = [
+    # The legacy stack we deliberately moved off (PLAN: obfstr/obfany → obfuse).
+    { name = "obfstr", reason = "replaced by obfuse (AEAD string encryption)" },
+    { name = "obfany", reason = "replaced by obfuse (AEAD string encryption)" },
+]
+skip = [
+    # obfuse pulls legacy crypto-common/rand_core 0.6 → getrandom 0.2; the
+    # wasm crates activate its `js` feature (see PLAN § Dependency policy).
+    { name = "getrandom", version = "0.2" },
+    { name = "getrandom", version = "0.3" },
+    { name = "rand_core", version = "0.6" },
+    { name = "rand_core", version = "0.9" },
+    { name = "crypto-common", version = "0.1" },
+    { name = "inout", version = "0.1" },
+    { name = "aead", version = "0.5" },
+    { name = "aes-gcm", version = "0.10" },
+    { name = "chacha20", version = "0.9" },
+    { name = "universal-hash", version = "0.5" },
+    { name = "syn", version = "2" },
+    { name = "rand", version = "0.9" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# Only crates.io is a trusted source; path deps inside the workspace are fine
+# (cargo-deny excludes workspace members from the source check).
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,285 @@
+name: CI
+
+on:
+    push:
+        branches: [prod]
+    pull_request:
+        branches: [prod]
+
+env:
+    CARGO_TERM_COLOR: always
+    RUST_BACKTRACE: 1
+
+jobs:
+    # Native Rust: fmt, clippy, tests (incl. the deterministic fuzz_smoke
+    # robustness suite), and the conformance-vector drift tripwire.
+    # Runs on both dev OS (Windows) and Linux (spec 06/08).
+    rust-native:
+        name: rust-native (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+            - uses: Swatinem/rust-cache@v2
+            - name: fmt
+              run: cargo fmt --all --check
+            - name: clippy
+              run: cargo clippy --workspace --all-targets -- -D warnings
+            - name: test (incl. fuzz_smoke robustness)
+              run: cargo test --workspace
+            - name: vectors drift check
+              run: cargo run -p mosseal-vectors -- --check
+
+    # Nightly `cargo fuzz` smoke (spec 08): 60 s each on the decode/open targets.
+    # The stable-toolchain counterpart (fuzz_smoke.rs) runs in `rust-native`;
+    # this job explores the same surface unbounded. `fuzz/` is a separate
+    # workspace root, excluded from the stable workspace.
+    fuzz-smoke:
+        name: fuzz-smoke
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@nightly
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: fuzz
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-fuzz
+            - name: fuzz decode (60 s)
+              working-directory: fuzz
+              run: cargo fuzz run decode -- -max_total_time=60
+            - name: fuzz open (60 s)
+              working-directory: fuzz
+              run: cargo fuzz run open -- -max_total_time=60
+
+    # Supply chain (spec 06, PLAN §N3): advisories, license allow-list, banned
+    # crates, and trusted sources. `cargo machete` re-confirms there are no
+    # unused direct dependencies (the manual audit in PLAN is now enforced).
+    supply-chain:
+        name: supply-chain
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+            # Both are supported tools; one action installs them together.
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-deny,cargo-machete
+            - name: cargo deny (advisories, licenses, bans, sources)
+              run: cargo deny --all-features check
+            - name: cargo machete (unused direct deps)
+              run: cargo machete
+
+    # Coverage report (spec 08, PLAN §N2): report-only for now — it uploads the
+    # llvm-cov summary as an artifact but does NOT fail the build. A hard floor
+    # is a later decision once the suite is stable across a few PRs.
+    coverage:
+        name: coverage (report-only)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: llvm-tools-preview
+            - uses: Swatinem/rust-cache@v2
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-llvm-cov
+            - name: llvm-cov summary
+              run: |
+                  cargo llvm-cov --workspace --summary-only | tee coverage-summary.txt
+            - name: upload coverage summary
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-summary
+                  path: coverage-summary.txt
+                  retention-days: 14
+
+    # wasm-bindgen unit tests (spec 08): the wasm-ONLY surface that native tests
+    # cannot reach — the generated-secrets parse path, the `JsError` machine-code
+    # contract, and the placeholder init failure. Two legs (PLAN §N4):
+    #   - node:   fast, no browser needed
+    #   - chrome: exercises the browser-only paths (`web_sys::window` hostname
+    #             detection in `Mosseal::new`) where they actually run
+    wasm-test:
+        name: wasm-test (${{ matrix.leg }})
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - leg: node
+                      args: --node
+                    - leg: chrome
+                      args: --chrome --headless
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
+            - uses: Swatinem/rust-cache@v2
+            - uses: jetli/wasm-pack-action@v0.4.0
+              with:
+                  version: latest
+            # Chrome + matching chromedriver for the browser leg.
+            - if: matrix.leg == 'chrome'
+              uses: nanasess/setup-chromedriver@v2
+            - if: matrix.leg == 'chrome'
+              run: chromedriver --version
+            - name: wasm-bindgen tests (${{ matrix.leg }})
+              run: wasm-pack test ${{ matrix.args }} crates/mosseal-wasm
+
+    # Node/wasm: build the conformance wasm (fixed test secrets) and run the
+    # cross-target suite against the real wasm (spec 08): byte-exact conformance
+    # vectors, URL/QR budget, and the Argon2id timing assertion.
+    wasm-node:
+        name: wasm-node
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
+            - uses: Swatinem/rust-cache@v2
+            - uses: jetli/wasm-pack-action@v0.4.0
+              with:
+                  version: latest
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: packages/core/package-lock.json
+            - name: install
+              working-directory: packages/core
+              run: npm ci
+            - name: build conformance wasm
+              run: node packages/core/test/build-conformance-wasm.mjs --force
+            - name: vitest (conformance vs vectors)
+              working-directory: packages/core
+              run: npm test
+
+    # Browser suite (spec 08): real wrapper + real consumer-compiled wasm in
+    # Chromium. Cross-host portability uses `page.route`-fulfilled fake hosts
+    # (a.test/b.test/c.test); net time is mocked the same way for the
+    # strict/lenient matrix (spec 07); a network-tab assertion proves no `#ms=`
+    # fragment ever leaves the machine.
+    wasm-browser:
+        name: wasm-browser
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
+            - uses: Swatinem/rust-cache@v2
+            - uses: jetli/wasm-pack-action@v0.4.0
+              with:
+                  version: latest
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: packages/core/package-lock.json
+            - name: install
+              working-directory: packages/core
+              run: npm ci
+            - name: install Chromium
+              working-directory: packages/core
+              run: npx playwright install --with-deps chromium
+            - name: typecheck
+              working-directory: packages/core
+              run: npm run typecheck
+            - name: playwright (build harness + run browser suite)
+              working-directory: packages/core
+              run: npm run test:e2e
+            - name: upload report on failure
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-report
+                  path: packages/core/playwright-report/
+                  retention-days: 7
+    # Package contents: verify `npm pack --dry-run` ships exactly what spec 06
+    # promises (core: dist/ only; CLI: dist/ + template/, no src/ leak).
+    packages:
+        name: packages
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: |
+                      packages/core/package-lock.json
+                      packages/mosseal/package-lock.json
+            - name: build @mosseal/core
+              working-directory: packages/core
+              run: |
+                  npm ci
+                  npm run build
+            - name: build mosseal CLI
+              working-directory: packages/mosseal
+              run: |
+                  npm ci
+                  npm run build
+            - name: test mosseal CLI (env/dotenv/codegen/dry-run)
+              working-directory: packages/mosseal
+              run: npm test
+            - name: pack @mosseal/core
+              working-directory: packages/core
+              run: npm pack --dry-run
+            - name: pack mosseal CLI
+              working-directory: packages/mosseal
+              run: npm pack --dry-run
+
+    # `mosseal doctor` in a CLEAN container (spec 06): proves the toolchain check
+    # is honest about a fresh consumer environment and that a fresh consumer CI
+    # (the README snippet) actually builds end-to-end from the packed tarball.
+    # The base image ships Node but no Rust/wasm-pack, so the job installs exactly
+    # what the docs promise and nothing else.
+    doctor-clean:
+        name: doctor (clean container)
+        runs-on: ubuntu-latest
+        container:
+            image: node:22-bookworm
+        steps:
+            - uses: actions/checkout@v4
+            - name: build + pack the CLI
+              run: |
+                  cd packages/mosseal
+                  npm ci
+                  npm run build
+                  npm pack --pack-destination /tmp
+                  npm install -g /tmp/mosseal-0.1.0.tgz
+            - name: install Rust + wasm32 target (as the consumer docs say)
+              run: |
+                  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target wasm32-unknown-unknown
+                  . "$HOME/.cargo/env"
+                  rustc --version
+            - name: install wasm-pack
+              run: |
+                  curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+                  wasm-pack --version
+            - name: doctor reports ready (from the packed tarball)
+              run: |
+                  . "$HOME/.cargo/env"
+                  mosseal doctor
+            - name: end-to-end build from the packed tarball
+              run: |
+                  . "$HOME/.cargo/env"
+                  mkdir -p /tmp/consumer && cd /tmp/consumer
+                  mosseal init
+                  printf 'MOSSEAL_ALLOWED_DOMAINS=example.com\n' >> .env
+                  mosseal build
+                  test -f mosseal-out/mosseal_wasm_bg.wasm
+                  test -f mosseal-out/meta.json
+                  cat mosseal-out/meta.json

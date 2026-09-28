@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mosseal-core",
+    "crates/mosseal-wasm",
+    "crates/mosseal-cli",
+    "crates/mosseal-vectors",
+]
+# `fuzz/` is a nightly-only `cargo fuzz` crate with its own workspace root.
+# Excluded so stable `cargo test --workspace` / clippy never try to build it.
+# Its stable-toolchain counterpart is `crates/mosseal-core/tests/fuzz_smoke.rs`.
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://example.com/mosseal"
+rust-version = "1.85"
+
+[workspace.dependencies]
+hkdf = "0.13"
+sha2 = "0.11"
+zeroize = "1.9"
+# rand 0.10 → getrandom 0.4.
+# (rand 0.8 would pull getrandom 0.2, forcing a second copy + `js` feature.)
+rand = "0.10"
+
+# errors / serialization
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.23"
+hex = "0.4"
+
+# obfuscation
+# obfuse: compile-time AEAD string encryption + secure memory wiping (replaces obfstr)
+# chacha20-poly1305 cipher selected to match MOSSEAL's own AEAD dep for wasm size
+obfuse = { version = "1.0", default-features = false, features = ["chacha20-poly1305"] }
+
+# cli
+clap = { version = "4.6", features = ["derive", "env"] }
+anyhow = "1.0"
+
+# wasm
+wasm-bindgen = "0.2.129"
+wasm-bindgen-test = "0.3.79"
+wasm-bindgen-futures = "0.4.79"
+serde-wasm-bindgen = "0.6"
+js-sys = "0.3.106"
+console_error_panic_hook = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

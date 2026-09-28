@@ -1,0 +1,25 @@
+[package]
+name = "mosseal-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Keep crypto crates on their current major releases. Their default random
+# generation features are disabled because MOSSEAL supplies salt/nonce bytes
+# through the workspace `getrandom` 0.4 dependency explicitly.
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
+# default-features off: we use the raw hash_password_into API only, with the
+# explicit alloc feature for Argon2's internal memory allocation.
+argon2 = { version = "0.6", default-features = false, features = ["alloc"] }
+hkdf.workspace = true
+sha2.workspace = true
+# `derive` enables the Zeroize/ZeroizeOnDrop derive macros used on the
+# envelope/payload/key types (previously pulled in transitively).
+zeroize = { workspace = true, features = ["derive"] }
+rand.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+base64.workspace = true

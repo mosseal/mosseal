@@ -1,0 +1,23 @@
+[package]
+name = "mosseal-vectors"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Conformance-vector generator (spec 08). Native-only; not shipped.
+# `cargo run -p mosseal-vectors` writes `vectors.json` in this crate.
+# The `drift` test regenerates in-memory and diffs against the checked-in
+# file so accidental format drift fails CI.
+
+[dependencies]
+mosseal-core = { path = "../mosseal-core" }
+serde_json.workspace = true
+base64.workspace = true
+hex.workspace = true
+
+[[bin]]
+name = "mosseal-vectors"
+path = "src/main.rs"

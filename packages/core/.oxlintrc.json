@@ -1,0 +1,25 @@
+{
+  "rules": {
+    "no-console": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/link.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["test/build-conformance-wasm.mjs"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["e2e/build-harness.mjs", "e2e/serve.mjs"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ]
+}

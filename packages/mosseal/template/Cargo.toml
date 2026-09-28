@@ -1,0 +1,75 @@
+[package]
+name = "mosseal-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+# NOTE: this is the TEMPLATE shipped inside the `mosseal` npm package (spec 05).
+# The CLI builder copies it to a temp dir, writes the generated `secrets.rs`,
+# and runs `wasm-pack build --target bundler` there. Consumers never edit it.
+rust-version = "1.85"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Conformance-only surface (spec 08): exposes `sealDeterministic` /
+# `openWithTime` so the Node/browser suites can reproduce native vectors
+# byte-exactly. NEVER enabled in consumer builds (the CLI builder does not
+# pass `--features conformance`).
+conformance = []
+
+[dependencies]
+# mosseal-core is vendored as a .crate file next to this manifest; the CLI
+# builder patches this path in before building (keeps the template
+# self-contained without publishing mosseal-core to crates.io).
+mosseal-core = { path = "./mosseal-core-0.1.0" }
+wasm-bindgen = "0.2.129"
+wasm-bindgen-futures = "0.4.79"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6.5"
+js-sys = "0.3.106"
+console_error_panic_hook = "0.1"
+serde_json = "1.0"
+hex = "0.4"
+obfuse = { version = "1.0.1", default-features = false, features = ["chacha20-poly1305"] }
+# wasm32 randomness: mosseal-core uses rand 0.10 → getrandom 0.4.
+# `wasm_js` is required for wasm32-unknown-unknown.
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
+# obfuse's transitive rand_core 0.6 → getrandom 0.2, which needs `js` on
+# wasm32-unknown-unknown. Declared here (aliased) purely to activate the
+# feature via Cargo feature unification; no code references it.
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+[dependencies.web-sys]
+version = "0.3.106"
+features = ["Window", "Location"]
+
+# wasm-pack runs `wasm-opt` (bundled binaryen) after the Rust build. wasm-pack
+# 0.15.0 still bundles binaryen 117, which predates the wasm features rustc
+# emits by default, so wasm-opt rejects the module unless those features are
+# explicitly enabled. Empirically only bulk-memory + nontrapping-fptoint are
+# required today; sign-ext and reference-types are kept for forward-compat
+# (harmless, and guard against future rustc default-feature changes).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-O",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-sign-ext",
+    "--enable-reference-types",
+]
+
+# cargo-machete false positives (PLAN §N3). Each is required but not detected
+# by textual search:
+#   obfuse                — referenced by the GENERATED `secrets.rs`.
+#   wasm-bindgen-futures  — needed by async `#[wasm_bindgen]` methods.
+#   getrandom/_02         — feature unification only; no code references them.
+[package.metadata.cargo-machete]
+ignored = ["obfuse", "wasm-bindgen-futures", "getrandom", "getrandom_02"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

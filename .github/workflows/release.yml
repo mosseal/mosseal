@@ -1,0 +1,76 @@
+# Release automation (spec 06, docs/versioning.md, PLAN §N5).
+#
+# The manual release checklist is error-prone: three manifests must move in
+# lockstep, the vendored mosseal-core crate is a packaged snapshot, and
+# vectors.json has a CI drift tripwire. This workflow makes the mechanical
+# steps reproducible.
+#
+#   mode=check  (default): verify every manifest agrees on one version.
+#   mode=bump:             run scripts/release.mjs --version <version>, which
+#                          bumps all manifests, regenerates vectors.json, and
+#                          refreshes the vendored crate. It does NOT commit —
+#                          download the artifact / open a PR from the diff.
+#
+# Publishing stays manual (npm tokens + CHANGELOG entry).
+
+name: release
+
+on:
+    workflow_dispatch:
+        inputs:
+            mode:
+                description: "check = verify consistency; bump = run the release script"
+                type: choice
+                options: [check, bump]
+                default: check
+            version:
+                description: "Target version for mode=bump (e.g. 0.2.0)"
+                type: string
+                required: false
+
+jobs:
+    release:
+        name: release (${{ inputs.mode }})
+        # workflow_dispatch can be triggered from any branch; restrict to prod.
+        if: github.ref == 'refs/heads/prod'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            - name: consistency check
+              run: node scripts/release.mjs --check
+
+            - name: bump + regenerate
+              if: inputs.mode == 'bump'
+              run: |
+                  if [ -z "${{ inputs.version }}" ]; then
+                    echo "::error::version input is required when mode=bump"
+                    exit 1
+                  fi
+                  node scripts/release.mjs --version "${{ inputs.version }}"
+
+            - name: verify regenerated artifacts are consistent
+              if: inputs.mode == 'bump'
+              run: |
+                  node scripts/release.mjs --check
+                  cargo run -p mosseal-vectors -- --check
+                  test -f "packages/mosseal/template/mosseal-core-${{ inputs.version }}.crate"
+
+            - name: upload release diff
+              if: inputs.mode == 'bump'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: release-${{ inputs.version }}
+                  path: |
+                      Cargo.toml
+                      packages/core/package.json
+                      packages/mosseal/package.json
+                      packages/mosseal/template/Cargo.toml
+                      packages/mosseal/template/mosseal-core-*.crate
+                      crates/mosseal-vectors/vectors.json
+                  retention-days: 14

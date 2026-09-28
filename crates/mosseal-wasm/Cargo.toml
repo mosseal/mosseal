@@ -1,0 +1,61 @@
+[package]
+name = "mosseal-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Conformance-only surface (spec 08): exposes `sealDeterministic` /
+# `openWithTime` so the Node/browser suites can reproduce native vectors
+# byte-exactly. NEVER enabled in consumer builds (the CLI builder does not
+# pass `--features conformance`).
+conformance = []
+
+[dependencies]
+mosseal-core = { path = "../mosseal-core" }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+js-sys.workspace = true
+console_error_panic_hook.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+# obfuse is required by the GENERATED `secrets.rs` (obfuse! literals); the
+# committed placeholder does not reference it, but the builder's output does.
+obfuse.workspace = true
+
+[dependencies.web-sys]
+version = "0.3"
+features = ["Window", "Location"]
+
+# wasm32 randomness feature activation (PLAN handoff blocker).
+#
+# These direct dependencies exist ONLY to turn on the required backend
+# features for the *shared transitive* getrandom instances via Cargo feature
+# unification — no code in this crate references them:
+#   * mosseal-core uses rand 0.10 → getrandom 0.4, which needs `wasm_js`.
+#   * obfuse's transitive rand_core 0.6 → getrandom 0.2, which needs `js`.
+# Both backends resolve to `globalThis.crypto.getRandomValues`, available in
+# Node ≥ 20 and browsers, so no extra JS glue is required.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.4", features = ["wasm_js"] }
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
+
+# cargo-machete false positives (PLAN §N3). Each is required but not detected
+# by textual search:
+#   obfuse                — referenced by the GENERATED `secrets.rs`, not the
+#                           committed placeholder (PLAN constraint 1).
+#   wasm-bindgen-futures  — needed by async `#[wasm_bindgen]` methods.
+#   getrandom/_02         — feature unification only (see the target-specific
+#                           block above); no code references them.
+[package.metadata.cargo-machete]
+ignored = ["obfuse", "wasm-bindgen-futures", "getrandom", "getrandom_02"]

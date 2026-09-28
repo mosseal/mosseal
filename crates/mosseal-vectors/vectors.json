@@ -1,0 +1,307 @@
+{
+  "config": {
+    "argonProfile": "minimum",
+    "domains": [
+      "a.test",
+      "b.test"
+    ],
+    "secrets": [
+      "ERERERERERERERERERERERERERERERERERERERERERE",
+      "",
+      "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+    ]
+  },
+  "envelopeVersion": 1,
+  "formatVersion": 1,
+  "generatedBy": "mosseal-vectors",
+  "now": 1700000000.0,
+  "vectors": [
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "020202020202020202020202",
+        "salt": "01010101010101010101010101010101"
+      },
+      "expectFragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "token-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "040404040404040404040404",
+        "salt": "03030303030303030303030303030303"
+      },
+      "expectFragment": "AQICEAMDAwMDAwMDAwMDAwMDAwMMBAQEBAQEBAQEBAQEmcmk5Li3IdoCJkbKza6aX1WBiphuJqYN6bkxmkjW-8agoIdY",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 1700003600,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": 1700003600,
+        "kind": 1,
+        "password": null
+      },
+      "name": "token-nopass-exp3600",
+      "openWithTime": 1700000000.0,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "060606060606060606060606",
+        "salt": "05050505050505050505050505050505"
+      },
+      "expectFragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5eU4Mx_paJRBjMw0RLqcO6nTnmF3tksBnkYA",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": null,
+        "kind": 1,
+        "password": "hunter2"
+      },
+      "name": "token-password-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "080808080808080808080808",
+        "salt": "07070707070707070707070707070707"
+      },
+      "expectFragment": "AQMCEAcHBwcHBwcHBwcHBwcHBwcMCAgICAgICAgICAgIDr0gMAV1sjzMM8o5fX3giqcXYoehD5JJhNZrcdGJxZtdPgDA",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 1700003600,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": 1700003600,
+        "kind": 1,
+        "password": "hunter2"
+      },
+      "name": "token-password-exp3600",
+      "openWithTime": 1700000000.0,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "0a0a0a0a0a0a0a0a0a0a0a0a",
+        "salt": "09090909090909090909090909090909"
+      },
+      "expectFragment": "AQACEAkJCQkJCQkJCQkJCQkJCQkMCgoKCgoKCgoKCgoKOiBNi4rdAYapdvW8tnIWNt7m-MLtHBdvo0kq9kxA0Fs856WR",
+      "expectOpen": {
+        "data": "state-blob",
+        "exp": 0,
+        "kind": 2
+      },
+      "input": {
+        "data": "state-blob",
+        "expSecs": null,
+        "kind": 2,
+        "password": null
+      },
+      "name": "appstate-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": 2,
+        "nonce": "0c0c0c0c0c0c0c0c0c0c0c0c",
+        "salt": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+      },
+      "expectFragment": "AQACEAsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMDAwMfgFyn_S_ZLsXVGd-B2yxTVKem90CGM8I8NE-LrpVD3s6ZnPB",
+      "expectOpen": {
+        "data": "tok_epoch2",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_epoch2",
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "epoch2-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "0e0e0e0e0e0e0e0e0e0e0e0e",
+        "salt": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
+      },
+      "expectFragment": "AQACEA0NDQ0NDQ0NDQ0NDQ0NDQ0MDg4ODg4ODg4ODg4OVB5eVvixX6331bOD0ZyByjYVBdRpAaDGLqM",
+      "expectOpen": {
+        "data": "",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "",
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "empty-data-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "101010101010101010101010",
+        "salt": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+      },
+      "expectFragment": "AQACEA8PDw8PDw8PDw8PDw8PDw8MEBAQEBAQEBAQEBAQAkR27gyyVrXAmfSwwjLu9vMEnodxhfON8Y4HUygA4SNk2iQi2A",
+      "expectOpen": {
+        "data": "tökén-✓",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tökén-✓",
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "unicode-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "expectError": "BAD_PASSWORD",
+      "name": "wrong-password",
+      "open": {
+        "fragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5eU4Mx_paJRBjMw0RLqcO6nTnmF3tksBnkYA",
+        "nowSecs": null,
+        "password": "WRONG"
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "BAD_PASSWORD",
+      "name": "missing-password",
+      "open": {
+        "fragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5eU4Mx_paJRBjMw0RLqcO6nTnmF3tksBnkYA",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "EXPIRED",
+      "name": "expired",
+      "open": {
+        "fragment": "AQICEBEREREREREREREREREREREMEhISEhISEhISEhISG8wKoqGhwBx3FXo9BJ7-rpT7WB04QzgP5rbp3A9t0Kv_PcjJ",
+        "nowSecs": 1700000000.0,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "MALFORMED_ENVELOPE",
+      "name": "malformed-not-base64",
+      "open": {
+        "fragment": "not!base64!!",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "MALFORMED_ENVELOPE",
+      "name": "malformed-truncated",
+      "open": {
+        "fragment": "AQAA",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "UNSUPPORTED_VERSION",
+      "name": "unsupported-version",
+      "open": {
+        "fragment": "AgACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "EPOCH_RETIRED",
+      "name": "epoch-retired",
+      "open": {
+        "fragment": "AQAFEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "EPOCH_RETIRED",
+      "name": "epoch-retired-hole",
+      "open": {
+        "fragment": "AQABEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "MALFORMED_ENVELOPE",
+      "name": "tampered-ciphertext",
+      "open": {
+        "fragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaau",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "UNSUPPORTED_KIND",
+      "name": "unsupported-kind",
+      "open": {
+        "fragment": "AQACEBMTExMTExMTExMTExMTExMMFBQUFBQUFBQUFBQUJyt7R94qLGpyr7k2Ra0PufG7k9Sku8_2_0k-hI8",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "PAYLOAD_TOO_LARGE",
+      "input": {
+        "dataLen": 256,
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "payload-too-large",
+      "type": "seal-error"
+    }
+  ]
+}

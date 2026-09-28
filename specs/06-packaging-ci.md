@@ -1,0 +1,149 @@
+# Spec 06 — Packaging, CI & Static Hosting
+
+## Goal
+
+npm distribution layout, the consumer's build pipeline (including the Rust-in-CI friction this
+model mandates), and static-host notes.
+
+## npm packages
+
+| Package | Contains | Published? |
+|---|---|---|
+| `mosseal` (CLI) | Rust template source + vendored `mosseal-core` crate + bundled `dist/` | yes |
+| `@mosseal/core` | TS wrapper (spec 04) | yes |
+
+Two packages because the wrapper is a runtime dep while the CLI is a devDep with the Rust
+toolchain attached; mixing them forces the toolchain concern onto consumers who only want
+types.
+
+### `mosseal` (CLI) package.json
+
+```jsonc
+{
+  "name": "mosseal",
+  "bin": { "mosseal": "./dist/mosseal.js" },
+  "files": ["dist/", "template/"],          // dist/ = bundled CLI; template/ = pinned Rust wasm template + vendored mosseal-core crate
+  "engines": { "node": "^20.19.0 || >=22.12.0" }
+  // zero runtime dependencies — the .env parser is internal (spec 05)
+}
+```
+
+The CLI is built with **Vite 8** (SSR target, `src/bin/mosseal.ts` → `dist/mosseal.js`); the
+`template/src/secrets.rs` shipped in the tarball is the **placeholder** (empty strings) — the
+builder always overwrites it in its temp copy with the consumer's generated obfuse literals.
+
+### `@mosseal/core` package.json
+
+```jsonc
+{
+  "name": "@mosseal/core",
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist/"],
+  "engines": { "node": "^20.19.0 || >=22.12.0" }
+}
+```
+
+`dist/index.js` is bundled by **Vite 8** (library mode); `dist/*.d.ts` are emitted by
+`tsc --emitDeclarationOnly` (TypeScript 7).
+
+## Consumer wiring
+
+```jsonc
+// consumer package.json
+{
+  "scripts": {
+    "prebuild": "mosseal build",
+    "build": "vite build"
+  },
+  "devDependencies": { "mosseal": "^1" },
+  "dependencies": { "@mosseal/core": "^1" }
+}
+```
+
+App code:
+
+```ts
+import { Mosseal } from "@mosseal/core";
+import wasmInit from "../mosseal-out/mosseal_wasm.js";
+// Mosseal.load accepts the init fn (bundler) or url/buffer (plain)
+const seal = await Mosseal.load(wasmInit);
+```
+
+`.gitignore`: add `mosseal-out/` and `.env` (CLI `init` warns about both).
+
+Each package ships its own `README.md` (npm renders it on the package page):
+`packages/mosseal/README.md` (CLI + consumer CI snippet + prerequisites) and
+`packages/core/README.md` (wrapper API + error codes + notes).
+
+## Consumer CI (GitHub Actions, GH Pages deploy)
+
+The canonical snippet lives in `packages/mosseal/README.md` § Consumer CI. It uses
+`Swatinem/rust-cache` (caches `~/.cargo` + `target/`) and `jetli/wasm-pack-action`
+(cross-platform; never `curl | sh` on Windows runners), runs `mosseal doctor` for fast
+failure, and passes secrets via env vars (real env wins over `.env`, so no secret file
+is written):
+
+```yaml
+  - uses: dtolnay/rust-toolchain@stable
+    with: { targets: wasm32-unknown-unknown }
+  - uses: Swatinem/rust-cache@v2
+  - uses: jetli/wasm-pack-action@v0.4.0
+    with: { version: latest }
+  - uses: actions/setup-node@v4
+    with: { node-version: 22, cache: npm }
+  - run: npm ci
+  - run: npx mosseal doctor
+  - run: npm run build
+    env:
+      MOSSEAL_SECRET_0: ${{ secrets.MOSSEAL_SECRET_0 }}
+      MOSSEAL_ALLOWED_DOMAINS: ${{ vars.MOSSEAL_ALLOWED_DOMAINS }}
+```
+
+Friction accepted by decision (compile-time injection ⇒ Rust toolchain in every consumer CI).
+Mitigations: `mosseal doctor` step for fast failure; cache `~/.cargo` — the crate is tiny,
+compile < 1 min after warm cargo cache.
+
+## Repo CI (this project)
+
+`.github/workflows/ci.yml`:
+
+- **rust-native** (ubuntu + windows): `cargo fmt --all --check`, `cargo clippy --workspace
+  --all-targets -- -D warnings`, `cargo test --workspace` (incl. the deterministic
+  `fuzz_smoke` robustness suite), and the conformance-vector drift tripwire.
+- **fuzz-smoke** (ubuntu, nightly): `cargo fuzz run decode` + `open`, 60 s each.
+- **wasm-test** (ubuntu, matrix node + chrome): `wasm-pack test crates/mosseal-wasm` in
+  both legs — the wasm-only surface (generated-secrets parse, `JsError` machine-code
+  contract, placeholder init). The Chromium leg exercises the browser-only paths
+  (`web_sys::window` hostname detection in `Mosseal::new`) where they actually run.
+- **wasm-node** (ubuntu): conformance wasm build → `vitest` against real wasm (byte-exact
+  vectors, URL/QR budget, Argon2 timing).
+- **supply-chain** (ubuntu): `cargo deny --all-features check` against `deny.toml`
+  (advisories, license allow-list, banned crates, trusted sources) + `cargo machete` to
+  confirm there are no unused direct dependencies.
+- **coverage** (ubuntu): `cargo llvm-cov --workspace --summary-only`, uploaded as an
+  artifact. **Report-only** — it does not fail the build; a hard floor is a later decision.
+- **packages** (ubuntu): build both npm packages, run the CLI unit tests, and verify
+  `npm pack --dry-run` contents.
+- **doctor-clean** (ubuntu, `node:22-bookworm` container): install Rust + wasm-pack as the
+  consumer docs say, run `mosseal doctor` from the **packed tarball** in a clean container,
+  then do an end-to-end `init` + `build` and assert `mosseal-out/` artifacts exist.
+- **wasm-browser** (ubuntu, chromium): `npm run test:e2e` — builds the web-target wasm
+  fixtures + Vite harness, then runs the Playwright suite (portability, `DOMAIN_MISMATCH`,
+  strict/lenient net-time matrix via `page.route`, the `MOSSEAL_TIME_SOURCES` custom-source
+  case, no-fragment-leak network assertion).
+- Matrix note: dev OS is Windows; CI must not assume `sh` — use cross-platform
+  invocations (`jetli/wasm-pack-action`, `npx`), never `curl | sh` on Windows runners.
+
+`.github/workflows/release.yml` (`workflow_dispatch`): runs the release consistency check
+(`node scripts/release.mjs --check`) and, in `bump` mode, the bump/regenerate script so a
+release cannot silently skip the manifest/vendored-crate/vectors steps (PLAN §N5).
+
+## Static hosting notes
+
+- GitHub Pages serves `.wasm` with `application/wasm` (required for
+  `instantiateStreaming`) — verified; document for other hosts.
+- Fragment-only URLs: no server config needed; deep links with fragments survive GH Pages 404
+  rewrite since fragment never reaches the server.
+- If the consumer site uses a Service Worker (chat's SW pattern), `mosseal-out` must be inside
+  the SW precache scope; note in docs, not enforced by tooling.
