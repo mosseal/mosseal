@@ -29,7 +29,32 @@ Both packages are published to **GitHub Packages** (`npm.pkg.github.com`). Add a
 `GITHUB_TOKEN` needs the `read:packages` scope (a classic PAT, or the automatic
 `GITHUB_TOKEN` in Actions with `packages: read`).
 
+New versions are published under the **`next` dist-tag** first, so `npm install
+@mosseal/cli` keeps resolving to the previous stable release until the GitHub Release is
+published (which promotes `next` → `latest`). To opt into a version under review:
+
+```bash
+npm install @mosseal/cli@next
+```
+
 Requires **Node ≥ 20.19** (or ≥ 22.12) and a Rust toolchain (see [Prerequisites](#prerequisites)).
+
+### Installing from git (no registry)
+
+Both packages also install straight from the repository. npm runs their `prepare`
+script, which builds `dist/` and regenerates the vendored `mosseal-core` crate — so a
+**Rust toolchain is required** for this path (the same one `mosseal build` needs):
+
+```bash
+npm install -D github:mosseal/mosseal#v0.1.0
+```
+
+Pin a tag or commit for reproducibility. For a registry-free install that needs **no**
+Rust toolchain, use the tarballs attached to the GitHub Release instead:
+
+```bash
+npm install -D ./mosseal-cli-0.1.0.tgz
+```
 
 ## Commands
 

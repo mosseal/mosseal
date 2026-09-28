@@ -96,9 +96,33 @@ node scripts/release.mjs --sync
    core source/dependency change. It is a derived artifact and is **not committed** —
    it is regenerated at `npm pack` time (`prepack`) and by `--sync`. *(scripted)*
 6. Tag the release and publish both packages to **GitHub Packages**
-   (`npm.pkg.github.com`, configured via `publishConfig`). *(manual)*
+   (`npm.pkg.github.com`, configured via `publishConfig`). *(scripted — the `release`
+   workflow publishes both packages under the `next` dist-tag, then creates the draft
+   Release)*
 
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)
 reads the authoritative version, compares it to the latest `v*` git tag, and **skips
-automatically** when it is not newer. Otherwise it builds + packs both packages and
-creates a **draft** GitHub Release; publishing to GitHub Packages stays manual.
+automatically** when it is not newer. Otherwise it builds + packs both packages,
+publishes them to GitHub Packages under the **`next` dist-tag**, and creates a **draft**
+GitHub Release with the tarballs attached.
+
+### Dist-tag staging (`next` → `latest`)
+
+GitHub Packages has no draft/staging state — `npm publish` is immediate. To keep the
+default install path safe while a release is under review, the workflow publishes under
+`next`, so `npm install @mosseal/cli` keeps resolving to the previous `latest`:
+
+```bash
+npm install @mosseal/cli          # previous latest
+npm install @mosseal/cli@next     # the version under review
+```
+
+Publishing the draft Release fires `.github/workflows/release-published.yml`, which
+promotes the released version to `latest`:
+
+```bash
+npm dist-tag add @mosseal/cli@<version> latest
+```
+
+So the full flow is: run `release` → packages land under `next` → review the draft →
+publish the Release → `latest` moves automatically.

@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "prepare": "npm run build && node ../../scripts/sync-core-crate.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint src test",
     "test": "vitest run",

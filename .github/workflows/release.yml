@@ -7,11 +7,15 @@
 #
 #   mode=check   (default): report the authoritative version and whether it is
 #                           newer than the latest `v*` git tag. No side effects.
-#   mode=release:           build + pack both packages and create a DRAFT GitHub
-#                           Release. Automatically SKIPPED when the authoritative
-#                           version is not newer than the latest `v*` git tag.
-#                           Publishing to GitHub Packages stays manual (review the
-#                           draft, then `npm publish` in each package).
+#   mode=release:           build + pack both packages, publish them to GitHub
+#                           Packages under the `next` dist-tag, and create a DRAFT
+#                           GitHub Release with the tarballs attached. Automatically
+#                           SKIPPED when the authoritative version is not newer than
+#                           the latest `v*` git tag.
+#
+# Publishing uses the `next` dist-tag so `npm install @mosseal/cli` keeps resolving
+# to the previous `latest` until the draft Release is published — see
+# `release-published.yml`, which promotes `next` → `latest`.
 
 name: release
 
@@ -30,9 +34,11 @@ jobs:
         # workflow_dispatch can be triggered from any branch; restrict to prod.
         if: github.ref == 'refs/heads/prod'
         runs-on: ubuntu-latest
-        # `contents: write` creates the draft Release.
+        # `contents: write` creates the draft Release; `packages: write` publishes
+        # to GitHub Packages.
         permissions:
             contents: write
+            packages: write
         steps:
             # Full history so `git tag` sees every release tag.
             - uses: actions/checkout@v4
@@ -70,14 +76,45 @@ jobs:
                     echo "::notice::skipping — $VERSION is not newer than latest tag v$LAST"
                   fi
 
-            # mode=release: build + pack both packages, then create a DRAFT
-            # GitHub Release with the tarballs attached. Publishing to GitHub
-            # Packages stays manual — review the draft, then `npm publish`.
+            # mode=release: build + pack both packages, publish them to GitHub
+            # Packages under the `next` dist-tag, then create a DRAFT GitHub
+            # Release with the tarballs attached. Publish runs BEFORE the draft
+            # Release (which creates the tag) so a failed publish leaves no tag
+            # and can be retried.
             - name: build + pack both packages
               if: inputs.mode == 'release' && steps.version.outputs.should_release == 'true'
               run: |
                   (cd packages/core && npm ci && npm run build && npm pack --pack-destination /tmp)
                   (cd packages/mosseal && npm ci && npm run build && npm pack --pack-destination /tmp)
+
+            - name: publish to GitHub Packages (next)
+              if: inputs.mode == 'release' && steps.version.outputs.should_release == 'true'
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  VERSION="${{ steps.version.outputs.version }}"
+                  # Auth via a temp npmrc so the repo's npm config is untouched.
+                  NPMRC="$(mktemp)"
+                  printf '//npm.pkg.github.com/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$NPMRC"
+                  export NPM_CONFIG_USERCONFIG="$NPMRC"
+
+                  # Idempotent: skip a package whose version is already published,
+                  # so a re-run after a partial failure is safe.
+                  publish() {
+                    local name="$1" file="$2"
+                    if npm view "$name@$VERSION" version \
+                         --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+                      echo "::notice::$name@$VERSION already published; skipping"
+                    else
+                      # `next` keeps `latest` on the previous release until the
+                      # draft Release is published (release-published.yml promotes).
+                      npm publish "$file" --tag=next --registry=https://npm.pkg.github.com
+                    fi
+                  }
+                  publish @mosseal/core "/tmp/mosseal-core-$VERSION.tgz"
+                  publish @mosseal/cli  "/tmp/mosseal-cli-$VERSION.tgz"
+                  rm -f "$NPMRC"
 
             - name: create draft GitHub Release
               if: inputs.mode == 'release' && steps.version.outputs.should_release == 'true'
@@ -87,5 +124,5 @@ jobs:
                   gh release create "v${{ steps.version.outputs.version }}" \
                     --draft \
                     --title "v${{ steps.version.outputs.version }}" \
-                    --notes "Draft release. Review the attached tarballs, then publish to GitHub Packages manually (\`npm publish\` in each package)." \
+                    --notes "Published to GitHub Packages under the \`next\` dist-tag as \`@mosseal/core@${{ steps.version.outputs.version }}\` and \`@mosseal/cli@${{ steps.version.outputs.version }}\`. Review the attached tarballs, then publish this draft — that promotes \`next\` to \`latest\`." \
                     /tmp/*.tgz

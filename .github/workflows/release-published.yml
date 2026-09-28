@@ -1,0 +1,46 @@
+# Promote a release from the `next` dist-tag to `latest` (spec 06).
+#
+# `release.yml` publishes new versions under the `next` dist-tag so that
+# `npm install @mosseal/cli` keeps resolving to the previous `latest` while the
+# draft Release is under review. Publishing that draft fires this workflow,
+# which moves `latest` to the released version.
+#
+# The version is taken from the release tag (`v<version>`), so the tag must match
+# the version that was published under `next`.
+
+name: release-published
+
+on:
+    release:
+        types: [published]
+
+jobs:
+    promote:
+        name: promote next → latest
+        runs-on: ubuntu-latest
+        # `packages: write` moves the dist-tag on GitHub Packages.
+        permissions:
+            packages: write
+        steps:
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+
+            - name: promote next → latest
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  VERSION="${GITHUB_REF_NAME#v}"
+                  echo "promoting $VERSION to latest"
+
+                  # Auth via a temp npmrc so no repo npm config is needed.
+                  NPMRC="$(mktemp)"
+                  printf '//npm.pkg.github.com/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$NPMRC"
+                  export NPM_CONFIG_USERCONFIG="$NPMRC"
+
+                  for name in @mosseal/core @mosseal/cli; do
+                    npm dist-tag add "$name@$VERSION" latest \
+                      --registry=https://npm.pkg.github.com
+                  done
+                  rm -f "$NPMRC"
