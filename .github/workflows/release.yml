@@ -5,13 +5,15 @@
 # vectors.json has a CI drift tripwire. This workflow makes the mechanical
 # steps reproducible.
 #
-#   mode=check  (default): verify every manifest agrees on one version.
-#   mode=bump:             run scripts/release.mjs --version <version>, which
-#                          bumps all manifests, regenerates vectors.json, and
-#                          refreshes the vendored crate. It does NOT commit —
-#                          download the artifact / open a PR from the diff.
-#
-# Publishing stays manual (npm tokens + CHANGELOG entry).
+#   mode=check   (default): verify every manifest agrees on one version.
+#   mode=bump:              run scripts/release.mjs --version <version>, which
+#                           bumps all manifests, regenerates vectors.json, and
+#                           refreshes the vendored crate. It does NOT commit —
+#                           download the artifact / open a PR from the diff.
+#   mode=release:           build + pack both packages and create a DRAFT GitHub
+#                           Release with the tarballs attached. Publishing to
+#                           GitHub Packages stays manual (review the draft, then
+#                           `npm publish` in each package).
 
 name: release
 
@@ -19,9 +21,9 @@ on:
     workflow_dispatch:
         inputs:
             mode:
-                description: "check = verify consistency; bump = run the release script"
+                description: "check = verify consistency; bump = run the release script; release = draft GitHub Release"
                 type: choice
-                options: [check, bump]
+                options: [check, bump, release]
                 default: check
             version:
                 description: "Target version for mode=bump (e.g. 0.2.0)"
@@ -34,6 +36,9 @@ jobs:
         # workflow_dispatch can be triggered from any branch; restrict to prod.
         if: github.ref == 'refs/heads/prod'
         runs-on: ubuntu-latest
+        # `contents: write` is required to create the draft GitHub Release.
+        permissions:
+            contents: write
         steps:
             - uses: actions/checkout@v4
             - uses: dtolnay/rust-toolchain@stable
@@ -74,3 +79,27 @@ jobs:
                       packages/mosseal/template/mosseal-core-*.crate
                       crates/mosseal-vectors/vectors.json
                   retention-days: 14
+
+            # mode=release: build + pack both packages, then create a DRAFT
+            # GitHub Release with the tarballs attached. Publishing to GitHub
+            # Packages stays manual — review the draft, then `npm publish`.
+            - name: build + pack both packages
+              if: inputs.mode == 'release'
+              run: |
+                  if [ -z "${{ inputs.version }}" ]; then
+                    echo "::error::version input is required when mode=release"
+                    exit 1
+                  fi
+                  (cd packages/core && npm ci && npm run build && npm pack --pack-destination /tmp)
+                  (cd packages/mosseal && npm ci && npm run build && npm pack --pack-destination /tmp)
+
+            - name: create draft GitHub Release
+              if: inputs.mode == 'release'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release create "v${{ inputs.version }}" \
+                    --draft \
+                    --title "v${{ inputs.version }}" \
+                    --notes "Draft release. Review the attached tarballs, then publish to GitHub Packages manually (\`npm publish\` in each package)." \
+                    /tmp/*.tgz

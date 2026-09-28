@@ -205,7 +205,7 @@ function main() {
         `  1. Add a CHANGELOG.md entry under [${version}].\n` +
         `  2. If the envelope layout changed, bump the version byte (spec 01).\n` +
         `  3. Review the regenerated vectors.json + vendored crate diff.\n` +
-        `  4. Commit, tag v${version}, and publish both npm packages.`
+        `  4. Commit, tag v${version}, and publish both packages to GitHub Packages.`
     );
   }
 }

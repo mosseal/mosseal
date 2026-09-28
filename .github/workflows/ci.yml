@@ -248,7 +248,7 @@ jobs:
               run: npm pack --pack-destination /tmp
             - name: assert the tarball ships the vendored crate
               run: |
-                  tar -tzf /tmp/mosseal-*.tgz | grep -q 'package/template/mosseal-core-.*\.crate'
+                  tar -tzf /tmp/mosseal-cli-*.tgz | grep -q 'package/template/mosseal-core-.*\.crate'
                   echo "✔ vendored mosseal-core crate present in the tarball"
 
     # `mosseal doctor` in a CLEAN container (spec 06): proves the toolchain check
@@ -281,7 +281,7 @@ jobs:
                   npm ci
                   npm run build
                   npm pack --pack-destination /tmp
-                  npm install -g /tmp/mosseal-*.tgz
+                  npm install -g /tmp/mosseal-cli-*.tgz
             - name: doctor reports ready (from the packed tarball)
               run: |
                   . "$HOME/.cargo/env"

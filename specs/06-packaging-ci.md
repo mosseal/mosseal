@@ -9,21 +9,22 @@ model mandates), and static-host notes.
 
 | Package | Contains | Published? |
 |---|---|---|
-| `mosseal` (CLI) | Rust template source + vendored `mosseal-core` crate + bundled `dist/` | yes |
+| `@mosseal/cli` (CLI) | Rust template source + vendored `mosseal-core` crate + bundled `dist/` | yes |
 | `@mosseal/core` | TS wrapper (spec 04) | yes |
 
 Two packages because the wrapper is a runtime dep while the CLI is a devDep with the Rust
 toolchain attached; mixing them forces the toolchain concern onto consumers who only want
 types.
 
-### `mosseal` (CLI) package.json
+### `@mosseal/cli` (CLI) package.json
 
 ```jsonc
 {
-  "name": "mosseal",
+  "name": "@mosseal/cli",
   "bin": { "mosseal": "./dist/mosseal.js" },
   "files": ["dist/", "template/"],          // dist/ = bundled CLI; template/ = pinned Rust wasm template + vendored mosseal-core crate
-  "engines": { "node": "^20.19.0 || >=22.12.0" }
+  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "publishConfig": { "registry": "https://npm.pkg.github.com" }
   // zero runtime dependencies — the .env parser is internal (spec 05)
 }
 ```
@@ -59,7 +60,7 @@ snapshot of `crates/mosseal-core`) that is **not committed**; it is regenerated 
     "prebuild": "mosseal build",
     "build": "vite build"
   },
-  "devDependencies": { "mosseal": "^1" },
+  "devDependencies": { "@mosseal/cli": "^1" },
   "dependencies": { "@mosseal/core": "^1" }
 }
 ```

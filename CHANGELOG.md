@@ -10,6 +10,10 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 
 ### Added
 
+- **GitHub Packages distribution** — both packages now publish to
+  `npm.pkg.github.com` (via `publishConfig`), and the `release` workflow gained a
+  `release` mode that builds + packs both packages and creates a **draft GitHub
+  Release** with the tarballs attached. Publishing to the registry stays manual.
 - **`mosseal-core`** — platform-agnostic crypto engine (spec 02):
   - `envelope.rs` — spec 01 binary format, AAD = header prefix, base64url codec, u32 payload length prefix.
   - `binding.rs` — spec 03 sorted-whitelist binding string + exact-match runtime gate.
@@ -154,6 +158,10 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   (was `"app_state"`), aligning the TS union with spec 01's canonical name. **Breaking
   for callers passing `kind: "app_state"`**; the wire byte (`0x02`) is unchanged, so
   existing links still open. The Rust constant is `kind::BINARY_BLOB`.
+- **CLI package renamed `mosseal` → `@mosseal/cli`** — GitHub Packages requires scoped
+  names. **Breaking for consumers**: `npm install -D mosseal` becomes
+  `npm install -D @mosseal/cli`. The `bin` name is unchanged, so `npx mosseal …` still
+  works after install.
 - **Strict-mode cross-source drift sanity** (spec 07 § optional v1.1) — strict mode now
   parses every reachable time source and rejects with `STRICT_TIME_UNAVAILABLE` when two
   disagree by more than 90 s, defending against a single spoofed source. Lenient mode is

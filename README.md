@@ -71,7 +71,7 @@ mosseal/
 
 ```bash
 # In your static site repository
-npm install -D mosseal
+npm install -D @mosseal/cli
 npm install @mosseal/core
 
 # Initialize environment configuration (.env)
@@ -141,7 +141,7 @@ are shown as they appear on a real run.
 #### 1. Scaffold and configure (once per site)
 
 ```bash
-npm install -D mosseal
+npm install -D @mosseal/cli
 npm install @mosseal/core
 npx mosseal init
 ```
@@ -479,7 +479,7 @@ The full taxonomy is `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`,
 
 | Package | Purpose | Docs |
 |---|---|---|
-| `mosseal` (npm, devDep) | CLI builder: validates env, injects secrets, compiles the per-consumer wasm | [`packages/mosseal/README.md`](packages/mosseal/README.md) |
+| `@mosseal/cli` (npm, devDep) | CLI builder: validates env, injects secrets, compiles the per-consumer wasm | [`packages/mosseal/README.md`](packages/mosseal/README.md) |
 | `@mosseal/core` (npm) | Runtime TS wrapper: loads wasm, URL fragments, error taxonomy | [`packages/core/README.md`](packages/core/README.md) |
 | `mosseal-core` (crate) | Platform-agnostic crypto engine | `specs/02-crypto-core.md` |
 | `mosseal-wasm` (crate) | wasm-bindgen bindings | `specs/02-crypto-core.md` |
@@ -556,7 +556,7 @@ Runs on every push to `prod` and every pull request. Nine jobs:
 | `wasm-test` | ubuntu (node + chrome) | `wasm-pack test` for the wasm-only surface; the Chromium leg exercises `web_sys::window` hostname detection. |
 | `wasm-node` | ubuntu | Builds the conformance wasm and runs the byte-exact vector suite + URL/QR budget + Argon2 timing. |
 | `wasm-browser` | ubuntu (chromium) | Playwright: cross-host portability, `DOMAIN_MISMATCH`, strict/lenient net-time matrix, custom `MOSSEAL_TIME_SOURCES`, no-fragment-leak assertion. |
-| `packages` | ubuntu | Builds both npm packages, runs the CLI unit tests, and verifies `npm pack --dry-run` contents. |
+| `packages` | ubuntu | Builds both packages, runs the CLI unit tests, and packs the CLI (asserting the derived vendored crate lands in the tarball). |
 | `doctor-clean` | ubuntu (`node:22-bookworm`) | `mosseal doctor` + an end-to-end `init`/`build` from the **packed tarball** in a clean container. |
 
 Run the same checks locally before pushing:
@@ -591,7 +591,9 @@ it is regenerated automatically by `npm pack`/`npm publish` (the `prepack` scrip
 on demand via `npm run sync:core`.
 
 The `release` workflow (`workflow_dispatch`) runs the consistency check and, in `bump`
-mode, executes the script and uploads the resulting diff as an artifact.
+mode, executes the script and uploads the resulting diff as an artifact. In `release`
+mode it builds + packs both packages and creates a **draft GitHub Release** with the
+tarballs attached — review the draft, then publish to GitHub Packages manually.
 
 **Release steps:**
 
@@ -599,11 +601,14 @@ mode, executes the script and uploads the resulting diff as an artifact.
 2. Run `node scripts/release.mjs --version <X.Y.Z>` (or the `release` workflow in `bump` mode).
 3. If the envelope layout changed, bump the `version` byte in `mosseal-core` and update spec 01. *(manual)*
 4. Review the regenerated `vectors.json` + vendored crate diff.
-5. Commit, tag `v<X.Y.Z>`, and publish both npm packages:
+5. Commit, tag `v<X.Y.Z>`, and publish both packages to **GitHub Packages**
+   (`npm.pkg.github.com`, set via `publishConfig`):
    ```bash
    (cd packages/core    && npm publish)
    (cd packages/mosseal && npm publish)
    ```
+   Consumers install from GitHub Packages (see
+   [`packages/mosseal/README.md`](packages/mosseal/README.md#install)).
 
 See [`docs/versioning.md`](docs/versioning.md) for the full semver + envelope-version policy.
 

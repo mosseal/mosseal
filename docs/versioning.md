@@ -89,7 +89,8 @@ node scripts/release.mjs --version 0.2.0
 5. Regenerate the vendored `packages/mosseal/template/mosseal-core-<ver>.crate` after any
    core source/dependency change. It is a derived artifact and is **not committed** —
    it is regenerated at `npm pack` time (`prepack`) and by this script. *(scripted)*
-6. Tag the release and publish both npm packages. *(manual)*
+6. Tag the release and publish both packages to **GitHub Packages**
+   (`npm.pkg.github.com`, configured via `publishConfig`). *(manual)*
 
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)
 runs the consistency check and can optionally execute the bump/regenerate steps on a

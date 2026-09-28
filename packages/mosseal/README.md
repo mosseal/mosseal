@@ -1,4 +1,4 @@
-# mosseal
+# @mosseal/cli
 
 CLI builder for [MOSSEAL](../../README.md) — the compile-time-injection step that turns
 your `.env` secrets into a per-consumer WebAssembly module.
@@ -14,9 +14,20 @@ share a key. The CLI validates your environment, generates an obfuscated `secret
 ## Install
 
 ```bash
-npm install -D mosseal
+npm install -D @mosseal/cli
 npm install @mosseal/core
 ```
+
+Both packages are published to **GitHub Packages** (`npm.pkg.github.com`). Add an
+`.npmrc` so npm resolves the `@mosseal` scope there:
+
+```ini
+@mosseal:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+`GITHUB_TOKEN` needs the `read:packages` scope (a classic PAT, or the automatic
+`GITHUB_TOKEN` in Actions with `packages: read`).
 
 Requires **Node ≥ 20.19** (or ≥ 22.12) and a Rust toolchain (see [Prerequisites](#prerequisites)).
 
