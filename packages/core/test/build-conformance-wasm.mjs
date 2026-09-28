@@ -27,6 +27,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hasVendoredCrate, syncCoreCrate } from "../../../scripts/sync-core-crate.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CORE_ROOT = resolve(HERE, "..");
@@ -88,6 +89,11 @@ export function buildConformanceWasm({
 
   const tmp = mkdtempSync(join(tmpdir(), "mosseal-conformance-"));
   try {
+    // The vendored mosseal-core crate is a derived artifact and is NOT committed
+    // (spec 06); regenerate it on demand so a fresh clone / CI can build.
+    if (!hasVendoredCrate()) {
+      syncCoreCrate();
+    }
     cpSync(TEMPLATE_DIR, tmp, { recursive: true });
 
     // Generated secrets.rs with the FIXED test secrets (spec 08). An explicit

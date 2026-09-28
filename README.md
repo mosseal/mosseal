@@ -574,7 +574,6 @@ cargo deny --all-features check && cargo machete   # needs cargo-deny / cargo-ma
 The release checklist is scripted so the lockstep manifest bump, the regenerated
 `vectors.json`, and the refreshed vendored crate cannot be skipped. Publishing itself
 stays manual (npm token, CHANGELOG entry, etc.).
-
 ```bash
 # Verify every manifest agrees on one version (also run in CI):
 node scripts/release.mjs --check
@@ -586,6 +585,10 @@ node scripts/release.mjs --version 0.2.0
 `--version` updates the workspace `Cargo.toml`, both `package.json` files, and the
 template `Cargo.toml` (+ its vendored `mosseal-core-<ver>` path) in lockstep, then
 regenerates `vectors.json` and re-packages the vendored crate.
+
+The vendored `mosseal-core-<ver>.crate` is a **derived artifact and is not committed**;
+it is regenerated automatically by `npm pack`/`npm publish` (the `prepack` script) and
+on demand via `npm run sync:core`.
 
 The `release` workflow (`workflow_dispatch`) runs the consistency check and, in `bump`
 mode, executes the script and uploads the resulting diff as an artifact.

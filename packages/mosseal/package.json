@@ -17,7 +17,9 @@
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint src test",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:core": "node ../../scripts/sync-core-crate.mjs",
+    "prepack": "node ../../scripts/sync-core-crate.mjs"
   },
   "devDependencies": {
     "@types/node": "^26",

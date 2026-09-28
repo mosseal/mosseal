@@ -207,13 +207,19 @@ jobs:
                   name: playwright-report
                   path: packages/core/playwright-report/
                   retention-days: 7
-    # Package contents: verify `npm pack --dry-run` ships exactly what spec 06
-    # promises (core: dist/ only; CLI: dist/ + template/, no src/ leak).
+    # Package contents: verify `npm pack` ships exactly what spec 06 promises
+    # (core: dist/ only; CLI: dist/ + template/, no src/ leak). The CLI pack
+    # also exercises the derived vendored crate: `prepack` regenerates
+    # `template/mosseal-core-<ver>.crate` from crates/mosseal-core (it is NOT
+    # committed), so this job needs the Rust toolchain and asserts the crate
+    # actually lands in the tarball.
     packages:
         name: packages
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
@@ -237,9 +243,13 @@ jobs:
             - name: pack @mosseal/core
               working-directory: packages/core
               run: npm pack --dry-run
-            - name: pack mosseal CLI
+            - name: pack mosseal CLI (prepack regenerates the vendored crate)
               working-directory: packages/mosseal
-              run: npm pack --dry-run
+              run: npm pack --pack-destination /tmp
+            - name: assert the tarball ships the vendored crate
+              run: |
+                  tar -tzf /tmp/mosseal-*.tgz | grep -q 'package/template/mosseal-core-.*\.crate'
+                  echo "✔ vendored mosseal-core crate present in the tarball"
 
     # `mosseal doctor` in a CLEAN container (spec 06): proves the toolchain check
     # is honest about a fresh consumer environment and that a fresh consumer CI
@@ -253,13 +263,8 @@ jobs:
             image: node:22-bookworm
         steps:
             - uses: actions/checkout@v4
-            - name: build + pack the CLI
-              run: |
-                  cd packages/mosseal
-                  npm ci
-                  npm run build
-                  npm pack --pack-destination /tmp
-                  npm install -g /tmp/mosseal-*.tgz
+            # Rust first: `npm pack` runs the `prepack` hook, which regenerates the
+            # derived vendored mosseal-core crate via `cargo package`.
             - name: install Rust + wasm32 target (as the consumer docs say)
               run: |
                   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target wasm32-unknown-unknown
@@ -269,6 +274,14 @@ jobs:
               run: |
                   curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
                   wasm-pack --version
+            - name: build + pack the CLI
+              run: |
+                  . "$HOME/.cargo/env"
+                  cd packages/mosseal
+                  npm ci
+                  npm run build
+                  npm pack --pack-destination /tmp
+                  npm install -g /tmp/mosseal-*.tgz
             - name: doctor reports ready (from the packed tarball)
               run: |
                   . "$HOME/.cargo/env"

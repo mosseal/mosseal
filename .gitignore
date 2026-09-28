@@ -49,6 +49,10 @@ pnpm-debug.log*
 # ...but the committed placeholder shipped in the template MUST be tracked, or a
 # fresh clone cannot compile the template (`template/src/lib.rs` includes it).
 !packages/mosseal/template/src/secrets.rs
+# The vendored mosseal-core crate is a DERIVED artifact (a `cargo package`
+# snapshot of crates/mosseal-core). It is regenerated at `npm pack` time
+# (`prepack` → scripts/sync-core-crate.mjs) and is deliberately NOT committed.
+packages/mosseal/template/mosseal-core-*.crate
 mosseal-out/
 
 # IDE

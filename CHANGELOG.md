@@ -76,6 +76,14 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   default `doctor` run stays fast and air-gapped-CI-safe; `--network` adds a check that
   fails with a hint when the network is unreachable (strict-time builds would fail
   `open()`).
+- **Vendored `mosseal-core` crate is now generated, not committed** — the
+  `packages/mosseal/template/mosseal-core-<ver>.crate` snapshot is a derived artifact
+  and is no longer tracked in git. It is regenerated automatically by `npm pack` /
+  `npm publish` (the `prepack` script → `scripts/sync-core-crate.mjs`), by the
+  conformance-wasm builder when missing (so `packages/core` tests work on a fresh
+  clone), and on demand via `npm run sync:core` — so it can no longer drift from
+  `crates/mosseal-core`. The `packages` CI job packs the CLI and asserts the crate
+  lands in the tarball.
 
 ### Fixed
 

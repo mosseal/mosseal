@@ -87,8 +87,8 @@ node scripts/release.mjs --version 0.2.0
 4. Regenerate `vectors.json` (`cargo run -p mosseal-vectors`) and commit it — the drift
    tripwire will fail CI otherwise. *(scripted)*
 5. Regenerate the vendored `packages/mosseal/template/mosseal-core-<ver>.crate` after any
-   core source/dependency change (it is a packaged snapshot, not synced automatically).
-   *(scripted)*
+   core source/dependency change. It is a derived artifact and is **not committed** —
+   it is regenerated at `npm pack` time (`prepack`) and by this script. *(scripted)*
 6. Tag the release and publish both npm packages. *(manual)*
 
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)

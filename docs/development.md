@@ -30,21 +30,26 @@ wire format or public API.
 
 `packages/mosseal/template/mosseal-core-<ver>.crate` is a **packaged snapshot** of
 `crates/mosseal-core`, shipped inside the `mosseal` npm package so the CLI can
-compile the template without publishing `mosseal-core` to crates.io. It is **not**
-synchronized automatically.
+compile the template without publishing `mosseal-core` to crates.io.
 
-> **Regenerate it after any `mosseal-core` source or dependency change**, or the
-> template will compile against a stale core (e.g. a missing function).
+It is a **derived artifact and is deliberately NOT committed** (see `.gitignore`).
+It is regenerated automatically:
 
-```bash
-cargo package -p mosseal-core --allow-dirty --no-verify
-cp target/package/mosseal-core-<ver>.crate packages/mosseal/template/
-```
+- by `npm pack` / `npm publish` in `packages/mosseal` (the `prepack` script),
+- by the conformance-wasm builder (`packages/core/test/build-conformance-wasm.mjs`)
+  when it is missing — so `npm test` / `npm run test:e2e` in `packages/core` work on a
+  fresh clone, and
+- on demand via `npm run sync:core` (from `packages/mosseal`), or
+  `node scripts/sync-core-crate.mjs` from the repo root.
 
-`node scripts/release.mjs --version <X.Y.Z>` does this as part of a release bump
-(see [`docs/versioning.md`](versioning.md)); do it manually for non-release core
-changes. The unpacked `packages/mosseal/template/mosseal-core-*/` directory is
-gitignored — the CLI builder unpacks the `.crate` into its temp build dir.
+Because it is generated on demand, it **cannot drift** from `crates/mosseal-core`
+— there is no manual refresh step. The `packages` CI job packs the CLI and asserts
+the crate lands in the tarball.
+
+`node scripts/release.mjs --version <X.Y.Z>` also regenerates it as part of a release
+bump (see [`docs/versioning.md`](versioning.md)). The unpacked
+`packages/mosseal/template/mosseal-core-*/` directory is gitignored — the CLI builder
+unpacks the `.crate` into its temp build dir.
 
 ## Local verification
 

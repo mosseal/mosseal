@@ -3,10 +3,9 @@
  * Release automation (spec 06, docs/versioning.md).
  *
  * The manual 6-step release checklist is error-prone: three manifests must move
- * in lockstep, the vendored `mosseal-core` crate is a packaged snapshot that is
- * NOT synced automatically, and `vectors.json` is a checked-in artifact with a
- * CI drift tripwire. This script does the mechanical parts and refuses to run
- * if anything is already inconsistent.
+ * in lockstep, the vendored `mosseal-core` crate is a derived artifact, and
+ * `vectors.json` is a checked-in artifact with a CI drift tripwire. This script
+ * does the mechanical parts and refuses to run if anything is already inconsistent.
  *
  * Usage:
  *   node scripts/release.mjs --version 0.2.0        # bump + regenerate
@@ -22,7 +21,9 @@
  *          `mosseal-core-<ver>` path dependency)
  *   2. Regenerate `crates/mosseal-vectors/vectors.json`.
  *   3. Re-package `mosseal-core` and refresh the vendored
- *      `packages/mosseal/template/mosseal-core-<ver>.crate`.
+ *      `packages/mosseal/template/mosseal-core-<ver>.crate` (via
+ *      `scripts/sync-core-crate.mjs`; the crate is a derived artifact and is
+ *      NOT committed — it is also regenerated at `npm pack` time).
  *
  * What it deliberately does NOT do (manual judgement required):
  *   - Write the CHANGELOG entry (release notes are prose).
@@ -30,7 +31,7 @@
  *   - Commit, tag, or publish.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, copyFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,8 +43,6 @@ const PATHS = {
   corePkg: join(ROOT, "packages", "core", "package.json"),
   cliPkg: join(ROOT, "packages", "mosseal", "package.json"),
   templateCargo: join(ROOT, "packages", "mosseal", "template", "Cargo.toml"),
-  vectors: join(ROOT, "crates", "mosseal-vectors", "vectors.json"),
-  templateDir: join(ROOT, "packages", "mosseal", "template"),
 };
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
@@ -150,7 +149,7 @@ function run(cmd, args) {
   execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit" });
 }
 
-function regenerateArtifacts(version, dryRun) {
+function regenerateArtifacts(dryRun) {
   if (dryRun) {
     console.log("dry-run: would regenerate vectors.json + the vendored crate");
     return;
@@ -159,16 +158,10 @@ function regenerateArtifacts(version, dryRun) {
   console.log("regenerating vectors.json …");
   run("cargo", ["run", "-p", "mosseal-vectors"]);
 
-  // 2. vendored mosseal-core crate (a packaged snapshot, not auto-synced).
+  // 2. vendored mosseal-core crate (a derived artifact; not committed).
+  //    Delegated to sync-core-crate.mjs so there is a single implementation.
   console.log("re-packaging mosseal-core …");
-  run("cargo", ["package", "-p", "mosseal-core", "--allow-dirty", "--no-verify"]);
-  const packaged = join(ROOT, "target", "package", `mosseal-core-${version}.crate`);
-  const dest = join(PATHS.templateDir, `mosseal-core-${version}.crate`);
-  if (!existsSync(packaged)) {
-    throw new Error(`expected packaged crate at ${packaged}`);
-  }
-  copyFileSync(packaged, dest);
-  console.log(`✔ refreshed ${dest}`);
+  run("node", [join(HERE, "sync-core-crate.mjs")]);
 }
 
 function main() {
@@ -204,7 +197,7 @@ function main() {
   } else {
     bump(version, dryRun);
   }
-  regenerateArtifacts(version, dryRun);
+  regenerateArtifacts(dryRun);
 
   if (!dryRun) {
     console.log(

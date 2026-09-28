@@ -1,7 +1,7 @@
 # Release automation (spec 06, docs/versioning.md).
 #
 # The manual release checklist is error-prone: three manifests must move in
-# lockstep, the vendored mosseal-core crate is a packaged snapshot, and
+# lockstep, the vendored mosseal-core crate is a derived artifact, and
 # vectors.json has a CI drift tripwire. This workflow makes the mechanical
 # steps reproducible.
 #
