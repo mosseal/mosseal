@@ -8,9 +8,11 @@
  * does the mechanical parts and refuses to run if anything is already inconsistent.
  *
  * Usage:
- *   node scripts/release.mjs --version 0.2.0        # bump + regenerate
+ *   node scripts/release.mjs --print              # print the authoritative version
+ *   node scripts/release.mjs --sync               # propagate Cargo version to npm/template
+ *   node scripts/release.mjs --version 0.2.0      # bump + regenerate
  *   node scripts/release.mjs --version 0.2.0 --dry-run
- *   node scripts/release.mjs --check                # verify consistency only
+ *   node scripts/release.mjs --check              # verify consistency only
  *
  * What it does (the parts a script can do safely):
  *   1. Bump the version in lockstep:
@@ -65,9 +67,10 @@ function setCargoSectionVersion(content, section, version) {
   if (start === -1) throw new Error(`Cargo section ${header} not found`);
   const before = content.slice(0, start + header.length);
   const after = content.slice(start + header.length);
-  const next = after.replace(/^(version\s*=\s*")[^"]+(")/m, `$1${version}$2`);
-  if (next === after) throw new Error(`no version key to replace in ${header}`);
-  return before + next;
+  const re = /^(version\s*=\s*")[^"]+(")/m;
+  if (!re.test(after)) throw new Error(`no version key in ${header}`);
+  // Idempotent: replacing with the current value is a no-op, not an error.
+  return before + after.replace(re, `$1${version}$2`);
 }
 
 function readJson(p) {
@@ -170,6 +173,25 @@ function main() {
   const dryRun = argv.includes("--dry-run");
   const vi = argv.indexOf("--version");
   const version = vi === -1 ? null : argv[vi + 1];
+
+  // Print the authoritative version (root Cargo.toml `[workspace.package]`).
+  // The release workflow uses this to decide whether to cut a release.
+  if (argv.includes("--print")) {
+    const rootCargo = readFileSync(PATHS.rootCargo, "utf8");
+    console.log(cargoSectionVersion(rootCargo, "workspace.package"));
+    return;
+  }
+
+  // Propagate the authoritative Cargo version to the npm manifests + template.
+  // This is the "packages follow Cargo" flow: edit Cargo.toml, then run this.
+  if (argv.includes("--sync")) {
+    const rootCargo = readFileSync(PATHS.rootCargo, "utf8");
+    const v = cargoSectionVersion(rootCargo, "workspace.package");
+    console.log(`syncing manifests to Cargo version ${v}`);
+    bump(v, dryRun);
+    regenerateArtifacts(dryRun);
+    return;
+  }
 
   if (check) {
     const v = checkConsistency();

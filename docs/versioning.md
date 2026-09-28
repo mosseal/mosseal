@@ -67,31 +67,38 @@ the [CHANGELOG](../CHANGELOG.md).
 
 ## Release checklist
 
-The mechanical steps are automated by [`scripts/release.mjs`](../scripts/release.mjs).
-It refuses to run from an inconsistent state and does the parts a script can do safely:
+The root `Cargo.toml` `[workspace.package] version` is the **single source of
+truth**. The npm manifests and the template `Cargo.toml` must agree with it; the
+`version-lockstep` CI job enforces that, and
+[`scripts/release.mjs`](../scripts/release.mjs) does the mechanical parts:
 
 ```bash
-# Verify every manifest agrees on one version (run in CI / pre-tag):
+# Verify every manifest agrees on the authoritative version (run in CI / pre-tag):
 node scripts/release.mjs --check
 
-# Bump + regenerate (preview with --dry-run):
-node scripts/release.mjs --version 0.2.0
+# Print the authoritative version (root Cargo.toml):
+node scripts/release.mjs --print
+
+# Propagate a Cargo.toml bump to the npm manifests + template (preview with --dry-run):
+node scripts/release.mjs --sync
 ```
 
 1. Update [`CHANGELOG.md`](../CHANGELOG.md) under a new version heading. *(manual)*
-2. Bump `version` in the workspace `Cargo.toml` (`[workspace.package]`), both
-   `packages/*/package.json` files, and the template `Cargo.toml` (+ its vendored
-   `mosseal-core-<ver>` path) in lockstep. *(scripted — `--version`)*
+2. Bump `version` in the workspace `Cargo.toml` (`[workspace.package]`), then run
+   `node scripts/release.mjs --sync` to propagate it to both `packages/*/package.json`
+   files and the template `Cargo.toml` (+ its vendored `mosseal-core-<ver>` path).
+   *(manual bump + scripted sync)*
 3. If the envelope layout changed, bump the `version` byte in `mosseal-core` and update
    spec 01. *(manual — wire-format judgement)*
 4. Regenerate `vectors.json` (`cargo run -p mosseal-vectors`) and commit it — the drift
-   tripwire will fail CI otherwise. *(scripted)*
+   tripwire will fail CI otherwise. *(scripted — `--sync`)*
 5. Regenerate the vendored `packages/mosseal/template/mosseal-core-<ver>.crate` after any
    core source/dependency change. It is a derived artifact and is **not committed** —
-   it is regenerated at `npm pack` time (`prepack`) and by this script. *(scripted)*
+   it is regenerated at `npm pack` time (`prepack`) and by `--sync`. *(scripted)*
 6. Tag the release and publish both packages to **GitHub Packages**
    (`npm.pkg.github.com`, configured via `publishConfig`). *(manual)*
 
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)
-runs the consistency check and can optionally execute the bump/regenerate steps on a
-branch, so a release cannot silently skip steps 2/4/5.
+reads the authoritative version, compares it to the latest `v*` git tag, and **skips
+automatically** when it is not newer. Otherwise it builds + packs both packages and
+creates a **draft** GitHub Release; publishing to GitHub Packages stays manual.
