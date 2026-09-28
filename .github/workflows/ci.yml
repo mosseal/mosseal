@@ -54,10 +54,10 @@ jobs:
                   tool: cargo-fuzz
             - name: fuzz decode (60 s)
               working-directory: fuzz
-              run: cargo fuzz run decode -- -max_total_time=60
+              run: cargo +nightly fuzz run decode -- -max_total_time=60
             - name: fuzz open (60 s)
               working-directory: fuzz
-              run: cargo fuzz run open -- -max_total_time=60
+              run: cargo +nightly fuzz run open -- -max_total_time=60
 
     # Supply chain (spec 06 § supply chain): advisories, license allow-list,
     # banned crates, and trusted sources. `cargo machete` re-confirms there are
@@ -267,6 +267,10 @@ jobs:
         # root home so both installers agree.
         env:
             HOME: /root
+            # HOME=/root makes the runner's docker CLI look for
+            # /root/.docker/config.json (unreadable from the host user) and print
+            # a warning on every docker command; point it at a writable path.
+            DOCKER_CONFIG: /tmp/.docker
         steps:
             - uses: actions/checkout@v4
             # Rust first: `npm pack` runs the `prepack` hook, which regenerates the
@@ -274,6 +278,9 @@ jobs:
             - name: install Rust + wasm32 target (as the consumer docs say)
               run: |
                   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target wasm32-unknown-unknown
+                  # Persist cargo/rustup on PATH for later steps: the wasm-pack
+                  # installer and `mosseal doctor` look up `rustup`/`cargo` on PATH.
+                  echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
                   . "$HOME/.cargo/env"
                   rustc --version
             - name: install wasm-pack

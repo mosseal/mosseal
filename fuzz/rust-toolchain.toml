@@ -1,0 +1,7 @@
+# `cargo fuzz` requires nightly (libFuzzer + sanitizers). This directory is its
+# own workspace root, so this file overrides the repo-root `rust-toolchain.toml`
+# (which pins `stable`) for any cargo command run from `fuzz/` — including the
+# `cargo build` that `cargo fuzz` spawns. Without it, `cargo fuzz run` picks up
+# stable and fails with "the option `Z` is only accepted on the nightly compiler".
+[toolchain]
+channel = "nightly"
