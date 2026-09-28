@@ -1,7 +1,7 @@
 //! Expiry enforcement + internet-time sources (spec 07).
 //!
-//! Raw NTP is impossible in browsers (UDP). The chat's `cloudflare.com` HEAD
-//! `Date`-header idea fails CORS (`Date` is not exposed cross-origin), so this
+//! Raw NTP is impossible in browsers (UDP). Fetching `cloudflare.com` for its
+//! `Date` header fails CORS (`Date` is not exposed cross-origin), so this
 //! module fetches small CORS-enabled bodies instead and parses timestamps
 //! from them.
 //!
@@ -20,7 +20,7 @@
 use crate::{ErrorCode, MossealError, Result};
 use std::borrow::Cow;
 
-/// Default CORS-enabled, body-parseable time sources (D14, spec 07).
+/// Default CORS-enabled, body-parseable time sources (spec 07).
 pub const DEFAULT_TIME_SOURCES: &[TimeSource] = &[
     TimeSource {
         id: Cow::Borrowed("cloudflare-trace"),

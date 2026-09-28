@@ -145,5 +145,3 @@ release cannot silently skip the manifest/vendored-crate/vectors steps.
   `instantiateStreaming`) — verified; document for other hosts.
 - Fragment-only URLs: no server config needed; deep links with fragments survive GH Pages 404
   rewrite since fragment never reaches the server.
-- If the consumer site uses a Service Worker (chat's SW pattern), `mosseal-out` must be inside
-  the SW precache scope; note in docs, not enforced by tooling.

@@ -29,8 +29,8 @@ pub fn binding_string(whitelist: &[String]) -> Vec<u8> {
     out
 }
 
-/// Runtime allow-list check: exact-match hostnames only — no suffix or
-/// wildcard matching in v1 (`evil-user.github.io` must not match `github.io`).
+/// Runtime allow-list check: exact-match hostnames only
+/// (`evil-user.github.io` must not match `github.io`).
 /// Missing/duplicate entries are the caller's problem (CLI validates).
 pub fn runtime_host_allowed(hostname: &str, whitelist: &[String]) -> bool {
     whitelist.iter().any(|h| h.trim() == hostname)

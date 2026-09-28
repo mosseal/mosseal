@@ -3,7 +3,7 @@
  *
  * Purpose: prove memory-hardness was NOT silently compiled out while keeping
  * the UX budget. The `minimum` profile is the OWASP floor (19 MiB, t=2, p=1 —
- * decision D8), which measures ~30–60 ms in wasm, NOT the ≥ 250 ms the original
+ * spec 02), which measures ~30–60 ms in wasm, NOT the ≥ 250 ms the original
  * spec text assumed. The assertion therefore checks:
  *
  *   1. Argon2id is **meaningfully slower than HKDF** (the memory-hard path is

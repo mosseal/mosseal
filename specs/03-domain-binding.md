@@ -4,7 +4,7 @@
 
 Bind envelopes to a set of whitelisted hostnames so a reversed binary alone cannot decrypt
 links outside the deployment's origins — while keeping links portable across *all* whitelisted
-hosts of the same deployment (fixes the chat's multi-domain breakage bug).
+hosts of the same deployment.
 
 ## Decision (user)
 
@@ -17,9 +17,9 @@ Two distinct roles, deliberately separated:
 1. **KDF binding string** — the cryptographic input. Must be *canonical and deployment-stable*.
 2. **Runtime allow-list check** — the enforcement gate. A runtime UX/security guard.
 
-The bug in the original chat: using the *runtime* hostname inside the KDF means a link created
-on `user.github.io` cannot be opened on the same site served at `custom-domain.com`. We avoid
-this by never putting a specific runtime hostname into the KDF.
+Using the *runtime* hostname inside the KDF would mean a link created on `user.github.io`
+cannot be opened on the same site served at `custom-domain.com`. We avoid this by never
+putting a specific runtime hostname into the KDF.
 
 ### 1. Binding string (goes into KDF `info` / Argon2 input)
 
@@ -36,12 +36,10 @@ binding = "mosseal/v1" || 0x1F || join(sorted(whitelist), ",")
 ### 2. Runtime allow-list check (in `open()`/`seal()`, before KDF work)
 
 - In browser builds: read `window.location.hostname`; require it to be in the whitelist, else
-  error `DOMAIN_MISMATCH`. Exact match only — no suffix/wildcard matching in v1 (`evil-user.github.io`
-  must not match `github.io`).
+  error `DOMAIN_MISMATCH`. Exact match only (`evil-user.github.io` must not match `github.io`).
 - In Node/non-browser: the check is skipped (CLI/admin tooling seals links from trusted
-  machines). This is the "trusted-node-server" path from the chat, formalized. The whitelist
-  still participates in the binding string, so a Node-sealed link only opens on whitelisted
-  hosts.
+  machines). The whitelist still participates in the binding string, so a Node-sealed link
+  only opens on whitelisted hosts.
 
 ### Compile-time configuration
 
@@ -53,12 +51,12 @@ Validated by the CLI build and injected as an `obfuse!` literal into generated `
 Missing or empty values cause the CLI pre-validation check to fail immediately with an actionable
 error before invoking `wasm-pack`.
 
-### Threat notes (carried from assessment)
+### Threat notes
 
 - This check is bypassable by patching the wasm or proxying `window.location` — it raises the
   bar, it does not cryptographically bind to the true origin.
-- Exact-match semantics chosen deliberately; wildcard support is a non-goal for v1 (complexity
-  and subdomain-takeover footguns).
+- Exact-match semantics chosen deliberately (wildcard matching would add complexity and
+  subdomain-takeover footguns).
 - `localhost` in the whitelist is a dev convenience; document that shipping it to production
   weakens binding (any local page could open links). The CLI **warns** (does not block) if
   `localhost` is present.

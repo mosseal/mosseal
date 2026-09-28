@@ -2,10 +2,10 @@
 
 ## Goal
 
-Stateless, JWT-`exp`-style expiry. Fix the two flaws from the chat: raw NTP is impossible in
-browsers (UDP), and the proposed `fetch` of `cloudflare.com` root **fails CORS** — the `Date`
-header is not exposed cross-origin without `Access-Control-Expose-Headers`, so the original
-design would always error in strict mode.
+Stateless, JWT-`exp`-style expiry. Two constraints shape the design: raw NTP is impossible in
+browsers (UDP), and fetching `cloudflare.com` root for its `Date` header **fails CORS** — the
+`Date` header is not exposed cross-origin without `Access-Control-Expose-Headers`, so that
+approach would always error in strict mode.
 
 ## Time sources (CORS-enabled, body-parseable)
 
@@ -48,8 +48,8 @@ the bar above OS-clock tampering, it does not eliminate client-side time manipul
 | strict | ok | use net time |
 | strict | fail | `STRICT_TIME_UNAVAILABLE` — decryption halted, no fallback |
 
-The chat's requirement, preserved verbatim: in strict mode, NTP-equivalent time must be
-reachable or open fails with a network/ntp error rather than falling back.
+In strict mode, NTP-equivalent time must be reachable or open fails with a network/ntp error
+rather than falling back.
 
 ## Envelope interaction
 

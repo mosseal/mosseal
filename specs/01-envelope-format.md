@@ -19,8 +19,8 @@ Rules:
   link-preview bots see ciphertext only.
 - Prefix `ms=` is required so consumers can detect MOSSEAL links among other hash usage
   (e.g. anchor navigation). The consuming app must tolerate other fragments.
-- Exactly **one** fragment value; all envelope fields live inside the base64url blob (unlike the
-  chat's split `?payload=&nonce=#salt`, which doubled URL size).
+- Exactly **one** fragment value; all envelope fields live inside the base64url blob (a split
+  `?payload=&nonce=#salt` form would double URL size).
 - No query parameters are ever used for envelope data.
 - The fragment value is the base64url encoding of the **whole binary envelope** (see layout below).
   The format `version` byte is the first byte *inside* that binary envelope — it is **not** a

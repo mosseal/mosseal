@@ -61,7 +61,7 @@ mosseal doctor       # check rust/wasm-pack presence, versions, warnings
 ### Why the template ships as source
 
 Every consumer must compile with their own secrets (publishing a pre-built wasm would share one
-key across all users of the library — the chat's central insight). The npm package therefore
+key across all users of the library). The npm package therefore
 contains the Rust crate source and vendored core crate; the CLI runs wasm-pack against it in a temp
 checkout pinned to the package version (consumers never edit Rust directly; upgrades come from
 the npm package). Real secrets are written to temporary `secrets.rs` files during compilation and

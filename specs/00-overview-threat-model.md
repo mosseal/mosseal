@@ -17,6 +17,12 @@ URLs (including QR codes) on static hosts (GitHub Pages etc.), with no backend.
   (URL host, chat logs, server logs, link-preview bots) has "zero knowledge" of the payload —
   that is the extent of the claim.
 
+## Scope (v1)
+
+Library + CLI + tests. The core risk this project addresses is cross-target correctness —
+native Rust, Node-wasm, and browser-wasm must produce and open identical links. A demo
+application is not part of v1.
+
 ## What the system defends against
 
 | Threat | Default (no password) | With password |

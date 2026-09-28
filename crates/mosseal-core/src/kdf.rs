@@ -1,6 +1,6 @@
 //! Key derivation (spec 02 § Key derivation).
 //!
-//! Two mutually exclusive paths (D10: Argon2id replaces HKDF in password
+//! Two mutually exclusive paths (spec 02: Argon2id replaces HKDF in password
 //! mode — not layered):
 //!
 //! - **Default (no password) — HKDF-SHA256**
@@ -20,7 +20,7 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-/// Argon2 memory cost in KiB per profile (spec 02 / D8).
+/// Argon2 memory cost in KiB per profile (spec 02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Argon2Profile {
     /// OWASP 2024 floor: 19 MiB, t=2, p=1.
@@ -81,7 +81,7 @@ pub fn derive_hkdf(internal_secret: &[u8], salt: &[u8; 16], binding_str: &[u8]) 
     DerivedKey(key)
 }
 
-/// Argon2id password path (D10): input combines binding, secret, password so
+/// Argon2id password path (spec 02): input combines binding, secret, password so
 /// password entropy gates offline attacks.
 pub fn derive_argon2(
     internal_secret: &[u8],

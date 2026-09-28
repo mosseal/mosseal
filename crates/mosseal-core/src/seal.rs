@@ -25,7 +25,7 @@ pub struct SealInput {
     pub kind: u8,
     /// Unix seconds; `None`/0 = no expiry (offline-capable link).
     pub exp: Option<u64>,
-    /// Optional password — switches KDF to Argon2id (D1/D10).
+    /// Optional password — switches KDF to Argon2id (spec 02).
     pub password: Option<Vec<u8>>,
     /// Randomness override for deterministic conformance vectors (tests only).
     pub deterministic_salt: Option<[u8; 16]>,

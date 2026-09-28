@@ -14,7 +14,7 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   - `envelope.rs` — spec 01 binary format, AAD = header prefix, base64url codec, u32 payload length prefix.
   - `binding.rs` — spec 03 sorted-whitelist binding string + exact-match runtime gate.
   - `epoch.rs` — spec 02 key-epoch registry with `EPOCH_RETIRED` semantics.
-  - `kdf.rs` — HKDF-SHA256 default path, Argon2id password path (D10: replaces, not layers).
+  - `kdf.rs` — HKDF-SHA256 default path, Argon2id password path (spec 02: replaces, not layers).
   - `time.rs` — spec 07 time sources/parsers, strict/lenient modes, cache, skew.
   - `seal.rs` — `SealContext::{seal, open}` orchestration and the full error taxonomy.
 - **`mosseal-wasm`** — wasm-bindgen surface (`Mosseal::new/seal/open`,
@@ -116,7 +116,7 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   been published yet), so links sealed by an older build will not open. `MAX_PAYLOAD_BYTES`
   is exported from `mosseal-core` for callers that need the current cap.
 - **Argon2id timing assertion (spec 08)** — the original `≥ 250 ms` floor was
-  unreachable: the `minimum` profile is the OWASP floor (19 MiB, t=2, p=1, decision D8),
+  unreachable: the `minimum` profile is the OWASP floor (19 MiB, t=2, p=1, spec 02),
   which measures ~30–60 ms in wasm. The assertion now checks the *relative* signal
   (Argon2 ≫ HKDF) plus the `< 1.5 s` UX ceiling, which is what actually catches a
   compiled-out Argon2.

@@ -5,7 +5,7 @@
  * 2. Resolve toolchain (actionable failure + `mosseal doctor` hint).
  * 3. Copy the pinned Rust template to a temp dir, write generated
  *    `secrets.rs` (obfuse literals), spawn
- *    `wasm-pack build --target bundler` (single target, D11).
+ *    `wasm-pack build --target bundler` (single target).
  * 4. Emit `mosseal-out/meta.json` (provenance, no secrets).
  * 5. Exit non-zero on any failure, passing wasm-pack output through.
  */

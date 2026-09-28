@@ -42,7 +42,7 @@ Rules:
   (`< 1.5 s`). Proves memory-hardness wasn't silently compiled out without pinning a
   brittle absolute floor.
 - **Amended 2026-09-26:** the original text asserted `≥ 250 ms`, but the `minimum`
-  profile is the OWASP floor (19 MiB, t=2, p=1 — decision D8), which measures
+  profile is the OWASP floor (19 MiB, t=2, p=1 — spec 02), which measures
   **~30–60 ms** in wasm. The 250 ms floor was unreachable at those params; the
   assertion now checks the *relative* signal (Argon2 ≫ HKDF) plus the UX ceiling,
   which is what actually catches a compiled-out/stubbed Argon2.

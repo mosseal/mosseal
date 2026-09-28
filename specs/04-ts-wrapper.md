@@ -70,14 +70,14 @@ The wrapper adds user-presentable default messages per code so apps don't string
   `null`-equivalent: `openFromUrl` throws `MALFORMED_ENVELOPE` only for *present but invalid*
   mosseal fragments; expose `seal.isMossealUrl(url): boolean` for silent detection).
 
-## Receiver flow (the "sanitize URL" step, from the chat)
+## Receiver flow
 
 1. App detects `seal.isMossealUrl(location.href)` → show import UI.
 2. If envelope flag says password-protected → prompt (input type=password).
 3. `openFromUrl` → wasm validates domain, derives key, decrypts, checks exp.
 4. On success, app immediately:
    - re-wraps plaintext with its own Web Crypto AES-GCM `CryptoKey` (`extractable: false`),
-     stores ciphertext in IndexedDB — the chat's existing pattern, unchanged;
+     stores ciphertext in IndexedDB;
    - **scrubs the URL**: `history.replaceState({}, title, url-without-fragment)` so the
      transport link cannot be bookmarked/re-shared accidentally;
    - drops the JS-side plaintext reference (zeroed view where possible).
@@ -102,10 +102,3 @@ The wrapper exposes `scrubFragmentFromUrl(url)` as a helper but the app drives w
   `application/wasm` MIME type (GitHub Pages serves this correctly; documented in 06).
 - **Node:** `init(readFileSync(pkgPath))` for CLI/admin scripts. Same wrapper API.
 - `Mosseal.load` idempotent; concurrent calls coalesce to one init. Errors → `WASM_INIT_FAILED`.
-
-## Service Worker integration (non-goal for v1, documented extension point)
-
-The chat's SW header-injection pattern is **out of scope** for the library (consumer-specific),
-but `openFromUrl` returning the token synchronously-enough is designed to not preclude it. A
-`docs/` recipe stub will describe the pattern with the caveat from the assessment (Network tab
-sees the final authenticated request regardless).

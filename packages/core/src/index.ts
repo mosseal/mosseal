@@ -34,7 +34,7 @@ const KIND_BINARY_BLOB = 0x02;
 export interface SealOptions {
   /** Secret material (token or small app-state blob). */
   data: string;
-  /** Optional password — switches KDF to Argon2id (spec 02 D10). */
+  /** Optional password — switches KDF to Argon2id (spec 02). */
   password?: string;
   /** Optional expiry in unix seconds; omit/0 = no expiry (offline-capable). */
   expSecs?: number;
