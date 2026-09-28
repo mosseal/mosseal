@@ -40,12 +40,15 @@ pnpm-debug.log*
 *.key
 
 # Generated secrets.rs — the CLI builder (`mosseal build`, spec 05) writes
-# obfuse-encrypted epoch secrets into this file. The committed placeholder
-# (crates/mosseal-wasm/src/secrets.rs) must stay in git; any GENERATED copy
-# containing real secrets must never be committed. The builder writes into
-# its template copy, but guard every location just in case:
-packages/mosseal/template/src/secrets.rs
+# obfuse-encrypted epoch secrets into this file. The committed placeholders
+# (crates/mosseal-wasm/src/secrets.rs and packages/mosseal/template/src/secrets.rs)
+# must stay in git; any GENERATED copy containing real secrets must never be
+# committed. The builder writes into its template copy, but guard every location
+# just in case:
 **/template/src/secrets.rs
+# ...but the committed placeholder shipped in the template MUST be tracked, or a
+# fresh clone cannot compile the template (`template/src/lib.rs` includes it).
+!packages/mosseal/template/src/secrets.rs
 mosseal-out/
 
 # IDE

@@ -1,7 +1,7 @@
 //! MOSSEAL core: platform-agnostic implementation of end-to-end authenticated
 //! link envelopes.
 //!
-//! This crate implements the specs in `specs/00`–`specs/09`. It contains no
+//! This crate implements the specs in `specs/00`–`specs/08`. It contains no
 //! platform-specific code; WASM bindings live in `mosseal-wasm` and CLI in
 //! `mosseal-cli`.
 //!

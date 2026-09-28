@@ -259,7 +259,7 @@ jobs:
                   npm ci
                   npm run build
                   npm pack --pack-destination /tmp
-                  npm install -g /tmp/mosseal-0.1.0.tgz
+                  npm install -g /tmp/mosseal-*.tgz
             - name: install Rust + wasm32 target (as the consumer docs say)
               run: |
                   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target wasm32-unknown-unknown

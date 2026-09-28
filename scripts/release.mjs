@@ -44,7 +44,6 @@ const PATHS = {
   templateCargo: join(ROOT, "packages", "mosseal", "template", "Cargo.toml"),
   vectors: join(ROOT, "crates", "mosseal-vectors", "vectors.json"),
   templateDir: join(ROOT, "packages", "mosseal", "template"),
-  packagedCrate: join(ROOT, "target", "package", "mosseal-core-0.1.0.crate"),
 };
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;

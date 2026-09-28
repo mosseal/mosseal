@@ -50,7 +50,7 @@ mosseal/
 ├── packages/
 │   ├── mosseal/         # Node.js CLI builder (`mosseal init`, `build`, `rotate`, `doctor`)
 │   └── core/            # TypeScript runtime wrapper (`@mosseal/core`), URL fragment parser, loader
-└── specs/               # Normative technical specifications (00 through 09)
+└── specs/               # Normative technical specifications (00 through 08)
 ```
 
 ### Build & Distribution Flow
@@ -545,7 +545,7 @@ GitHub Actions snippet in
 
 ### Repository CI (`.github/workflows/ci.yml`)
 
-Runs on every push to `main` and every pull request. Nine jobs:
+Runs on every push to `prod` and every pull request. Nine jobs:
 
 | Job | Runner | What it guards |
 |---|---|---|
