@@ -42,5 +42,10 @@
     "cryptography",
     "share-links"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codynhanpham/mosseal.git",
+    "directory": "packages/core"
+  },
   "license": "MIT OR Apache-2.0"
 }

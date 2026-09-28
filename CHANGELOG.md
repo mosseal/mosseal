@@ -11,7 +11,7 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 ### Added
 
 - **`mosseal-core`** — platform-agnostic crypto engine (spec 02):
-  - `envelope.rs` — spec 01 binary format, AAD = header prefix, base64url codec, 255 B cap.
+  - `envelope.rs` — spec 01 binary format, AAD = header prefix, base64url codec, u32 payload length prefix.
   - `binding.rs` — spec 03 sorted-whitelist binding string + exact-match runtime gate.
   - `epoch.rs` — spec 02 key-epoch registry with `EPOCH_RETIRED` semantics.
   - `kdf.rs` — HKDF-SHA256 default path, Argon2id password path (D10: replaces, not layers).
@@ -32,7 +32,7 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   (`decode`, `open`); `crates/mosseal-core/tests/fuzz_smoke.rs` is the stable-toolchain
   deterministic counterpart (arbitrary bytes, mutated envelopes, hostile fragments,
   every truncation boundary → no panics, taxonomy-only errors).
-- **URL/QR budget test** (spec 08) — max v1 payload (255 B + password) → URL ≤ 512 bytes
+- **URL/QR budget test** (spec 08) — QR-friendly payload (255 B + password) → URL ≤ 512 bytes
   and a `qrcode`/`jsqr` roundtrip that decodes back to the exact URL.
 - **Browser suite** (spec 08, Playwright) — `packages/core/e2e/` drives the real wrapper
   against the real consumer-compiled wasm in Chromium: cross-host portability +
@@ -108,6 +108,13 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 
 ### Changed
 
+- **Envelope payload length prefix is now `u32`** (spec 01) — the inner payload's `data_len`
+  field widened from `u8` to a little-endian `u32`, removing the old 255-byte ceiling. The
+  seal API still enforces a practical `MAX_PAYLOAD_BYTES` cap (now **4096 bytes**) and errors
+  with `PAYLOAD_TOO_LARGE` beyond it; the URL layer keeps its advisory 512-byte warning.
+  **Breaking wire-format change** — the envelope `version` byte stays `0x01` (no package has
+  been published yet), so links sealed by an older build will not open. `MAX_PAYLOAD_BYTES`
+  is exported from `mosseal-core` for callers that need the current cap.
 - **Argon2id timing assertion (spec 08)** — the original `≥ 250 ms` floor was
   unreachable: the `minimum` profile is the OWASP floor (19 MiB, t=2, p=1, decision D8),
   which measures ~30–60 ms in wasm. The assertion now checks the *relative* signal
@@ -151,4 +158,4 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   table lists the `wasm-test` node+chrome matrix plus the `supply-chain`/`coverage` jobs,
   and spec 01 no longer calls the `0x02` kind "(future)".
 
-[Unreleased]: https://example.com/mosseal/commits/main
+[Unreleased]: https://github.com/codynhanpham/mosseal/commits/main

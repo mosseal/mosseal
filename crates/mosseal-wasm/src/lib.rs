@@ -95,7 +95,7 @@ impl Mosseal {
     }
 
     /// Seal into the fragment string (the part after `#ms=`).
-    /// `data` hard-capped at 255 bytes (v1, spec 01).
+    /// `data` is capped at [`mosseal_core::MAX_PAYLOAD_BYTES`] (v1, spec 01).
     #[wasm_bindgen]
     pub fn seal(
         &self,

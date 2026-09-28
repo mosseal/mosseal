@@ -129,6 +129,352 @@ if (mosseal.isMossealUrl(window.location.href)) {
 ```
 
 
+## Detailed Usage
+
+This section walks through both supported surfaces end-to-end: the **TypeScript**
+path (the `mosseal` CLI builder + `@mosseal/core` runtime wrapper) and the **Rust**
+path (the native `mosseal` admin CLI + the `mosseal-core` library). Example outputs
+are shown as they appear on a real run.
+
+### TypeScript
+
+#### 1. Scaffold and configure (once per site)
+
+```bash
+npm install -D mosseal
+npm install @mosseal/core
+npx mosseal init
+```
+
+`init` generates a fresh 32-byte base64url epoch secret and merges it into `.env`
+non-destructively (existing keys are never overwritten):
+
+```text
+✔ wrote MOSSEAL_SECRET_0 to /home/you/site/.env
+✔ .env is gitignored.
+
+Next steps:
+  1. Add your deployment hostnames to .env:
+       MOSSEAL_ALLOWED_DOMAINS=your-site.github.io
+  2. Optional:
+       MOSSEAL_STRICT_TIME=false        # strict = fail open() without net time
+       MOSSEAL_ARGON2_PROFILE=minimum   # or "interactive"
+  3. Build the per-consumer wasm:
+       mosseal build                    # emits ./mosseal-out/
+  4. Add "prebuild": "mosseal build" to package.json scripts.
+```
+
+If `.env` is **not** gitignored, `init` refuses to stay quiet:
+
+```text
+⚠ DANGER: .env is NOT gitignored. Epoch secrets are the keys to every
+  link your app seals. Add `.env` to .gitignore BEFORE committing.
+  If it was ever committed, rotate ALL epochs and purge history.
+```
+
+Edit `.env` to add your hostnames, then verify the toolchain:
+
+```bash
+npx mosseal doctor
+```
+
+```text
+✔ node >=20 — v22.12.0
+✔ cargo — cargo 1.85.0 (7f08ace4f 2025-11-24)
+✔ rustc — rustc 1.85.0 (4d91de4e4 2025-02-17)
+✔ wasm-pack — wasm-pack 0.13.1
+✔ wasm32-unknown-unknown target
+```
+
+Add `--network` to also probe time-source reachability (useful before enabling
+`MOSSEAL_STRICT_TIME=true`):
+
+```text
+✔ network reachability (time sources) — reachable
+```
+
+#### 2. Build the per-consumer wasm
+
+```bash
+npx mosseal build
+```
+
+The CLI validates `.env`, generates an obfuscated `secrets.rs`, and runs
+`wasm-pack build --target bundler` into `./mosseal-out/`:
+
+```text
+✔ env ok: 1 active epoch(s), 1 domain(s), argon=minimum, time=lenient
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+[INFO]: ✨   Done in 42.3s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/you/site/mosseal-out.
+✔ build complete → /home/you/site/mosseal-out
+```
+
+Use `--dry-run` to validate without writing or compiling, and `--out-dir <dir>` to
+change the output location:
+
+```text
+✔ env ok: 1 active epoch(s), 1 domain(s), argon=minimum, time=lenient
+dry-run: validation passed, skipping wasm-pack build
+```
+
+Wire it into your bundler so it always runs first:
+
+```jsonc
+// package.json
+{
+  "scripts": {
+    "prebuild": "mosseal build",
+    "build": "vite build"
+  }
+}
+```
+
+#### 3. Seal and open links at runtime
+
+```ts
+import { Mosseal, MossealError, MossealErrorCode } from "@mosseal/core";
+import wasmInit from "./mosseal-out/mosseal_wasm.js";
+
+// One-time init (idempotent; concurrent calls coalesce).
+const mosseal = await Mosseal.load(wasmInit);
+
+// --- Sender: seal a token into a shareable URL ---
+const shareUrl = mosseal.generateShareUrl({
+  data: "ghp_PersonalAccessToken12345",
+  password: "optional-user-password", // omit for the default (no-password) mode
+  expSecs: 3600,                      // omit/0 = never expires (offline-capable)
+  kind: "token",                      // or "binary_blob"
+});
+// → "https://your-site.github.io/#ms=AQG...<base64url envelope>"
+
+// --- Receiver: open a link ---
+if (mosseal.isMossealUrl(window.location.href)) {
+  try {
+    const { data, exp, kind } = await mosseal.openFromUrl(window.location.href, {
+      password: "optional-user-password",
+    });
+    console.log("Decrypted token:", data); // "ghp_PersonalAccessToken12345"
+    console.log("Expires at:", exp);       // 1759000000 (unix seconds), or 0
+    console.log("Kind:", kind);            // "token"
+
+    // Scrub the fragment from the address bar once you've persisted `data`.
+    window.history.replaceState(
+      {},
+      document.title,
+      mosseal.scrubFragmentFromUrl(window.location.href)
+    );
+  } catch (err) {
+    if (err instanceof MossealError) {
+      // Match on the stable code, never the message text.
+      switch (err.code) {
+        case MossealErrorCode.BadPassword:
+          console.error("Wrong password — ask the sender to re-share.");
+          break;
+        case MossealErrorCode.Expired:
+          console.error("This link has expired.");
+          break;
+        case MossealErrorCode.DomainMismatch:
+          console.error("This link belongs to a different site.");
+          break;
+        default:
+          console.error("Could not open link:", err.code);
+      }
+    }
+  }
+}
+```
+
+Alternatively, encode/decode bare fragment instead of a full URL:
+
+```ts
+const fragment = mosseal.sealFragment({ data: "ghp_...", expSecs: 900 });
+// → "AQG...<base64url envelope>"  (the part after "#ms=")
+const result = await mosseal.openFragment(fragment);
+```
+
+> **Size budget:** `generateShareUrl` warns when the final URL exceeds 512 bytes,
+> because QR codes shrink quickly beyond that. The envelope itself allows payloads
+> up to 4096 bytes (`MAX_PAYLOAD_BYTES`), but keep `data` small — around 255 bytes
+> is the practical ceiling for a scannable QR code.
+
+#### 4. Rotate keys
+
+```bash
+npx mosseal rotate
+```
+
+```text
+✔ appended MOSSEAL_SECRET_1 (now sealing with epoch 1).
+
+Rotation notes (spec 02 § Key epochs):
+  • Links sealed under epochs 0..0 keep opening during the grace window.
+  • The actual invalidation event is RETIRING an old epoch: delete its
+    MOSSEAL_SECRET_<n> line from .env. open() then fails with EPOCH_RETIRED
+    for links sealed under it, while every other epoch keeps opening.
+  • Retiring an epoch leaves a HOLE in the list — that is expected. Do NOT
+    renumber the remaining secrets: epoch indices are positional, so
+    renumbering would silently re-key every surviving link.
+  • After your grace period (e.g. 30 days), delete the oldest epoch line.
+    You may retire epochs in any order; each hole is independent.
+```
+
+See [`docs/epoch-rotation.md`](docs/epoch-rotation.md) for the full runbook.
+
+### Rust
+
+The Rust surface has two parts: the **native admin CLI** (`mosseal-cli`, binary
+name `mosseal`) for trusted-machine sealing/opening, and the **`mosseal-core`
+library** for embedding the crypto engine directly.
+
+#### Native admin CLI
+
+The CLI is the trusted admin path (spec 03): it skips the runtime hostname gate
+and never blocks on network time. Epochs and domains come from flags or the
+`MOSSEAL_EPOCHS` / `MOSSEAL_ALLOWED_DOMAINS` environment variables.
+
+```bash
+# Generate a fresh 32-byte base64url epoch secret.
+cargo run -p mosseal-cli -- gen-secret
+# → "kQ7...<43-char base64url>"
+
+# Seal a token into a fragment (prompts for the token if omitted).
+cargo run -p mosseal-cli -- seal "ghp_PersonalAccessToken12345" \
+  --epochs "$MOSSEAL_EPOCHS" \
+  --domains user.github.io
+# → "AQG...<base64url envelope>"
+
+# Seal with a password and a 1-hour expiry.
+cargo run -p mosseal-cli -- seal "ghp_..." \
+  --password "hunter2" --exp 1759000000 \
+  --epochs "$MOSSEAL_EPOCHS" --domains user.github.io
+
+# Open and verify a fragment.
+cargo run -p mosseal-cli -- open "AQG...<fragment>" \
+  --epochs "$MOSSEAL_EPOCHS" --domains user.github.io
+```
+
+`open` prints a three-line report:
+
+```text
+kind: 1
+exp:  0
+data: ghp_PersonalAccessToken12345
+```
+
+`kind` is the numeric payload kind (`1` = token, `2` = binary blob) and `exp` is
+unix seconds (`0` = never expires). A wrong password or a tampered envelope exits
+non-zero and prints the stable error code without leaking the token:
+
+```text
+Error: BAD_PASSWORD: gcm tag mismatch
+```
+
+For admin debugging of an expired link, `--ignore-expiry` skips **only** the
+expiry check — domain binding, key epoch, password, and the AEAD tag are still
+verified:
+
+```bash
+cargo run -p mosseal-cli -- open "AQG...<fragment>" \
+  --epochs "$MOSSEAL_EPOCHS" --domains user.github.io --ignore-expiry
+```
+
+```text
+kind: 1
+exp:  1
+data: ghp_...
+```
+
+#### `mosseal-core` library
+
+Add the crate as a path (or workspace) dependency and drive `SealContext`
+directly. The library is platform-agnostic — no wasm, no browser globals.
+
+```toml
+# Cargo.toml
+[dependencies]
+mosseal-core = { path = "crates/mosseal-core" }
+```
+
+```rust
+use mosseal_core::{
+    binding,
+    epoch::EpochRegistry,
+    envelope::kind,
+    kdf::Argon2Profile,
+    seal::{SealContext, SealInput},
+    time::{FetchTimes, TimeMode, TimeSource},
+};
+
+/// No-op net-time fetcher: trusted callers never block on network time.
+struct NoFetch;
+impl FetchTimes for NoFetch {
+    fn fetch_unix_secs(&self, _s: &[TimeSource]) -> Option<f64> {
+        None
+    }
+}
+
+fn main() -> anyhow::Result<()> {
+    // 1. Build a deployment context: epoch registry + domain whitelist.
+    let epochs = EpochRegistry::parse("kQ7...<base64url>;...")?;
+    let whitelist = binding::parse_domain_list("user.github.io,example.com");
+    binding::validate_whitelist(&whitelist)?;
+
+    let ctx = SealContext {
+        epochs,
+        whitelist,
+        argon_profile: Argon2Profile::Minimum,
+        time_mode: TimeMode::Lenient,
+        runtime_hostname: None, // trusted path: skip the runtime host gate
+        time_sources: Vec::new(), // empty = spec 07 defaults
+    };
+
+    // 2. Seal a token (no password, no expiry).
+    let fragment = ctx.seal(&SealInput {
+        data: b"ghp_PersonalAccessToken12345".to_vec(),
+        kind: kind::TOKEN,
+        exp: None,
+        password: None,
+        deterministic_salt: None,
+        deterministic_nonce: None,
+        deterministic_epoch: None,
+    })?;
+    println!("{fragment}"); // → "AQG...<base64url envelope>"
+
+    // 3. Open it back (verifies domain, epoch, password, and AEAD tag).
+    let out = ctx.open(&fragment, None, &NoFetch)?;
+    println!("kind: {}", out.kind); // 1
+    println!("exp:  {}", out.exp);  // 0
+    println!("data: {}", String::from_utf8_lossy(&out.data));
+    // → "ghp_PersonalAccessToken12345"
+
+    Ok(())
+}
+```
+
+Errors carry a stable, machine-readable [`ErrorCode`] — match on it, never on the
+human-readable `Display` prose:
+
+```rust
+use mosseal_core::ErrorCode;
+
+match ctx.open(&fragment, Some(b"wrong"), &NoFetch) {
+    Ok(out) => println!("opened: {}", String::from_utf8_lossy(&out.data)),
+    Err(e) if e.code == ErrorCode::BadPassword => eprintln!("wrong password"),
+    Err(e) if e.code == ErrorCode::Expired => eprintln!("link expired"),
+    Err(e) => eprintln!("{}: {}", e.code.as_str(), e.detail),
+}
+```
+
+The full taxonomy is `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`,
+`UNSUPPORTED_KIND`, `PAYLOAD_TOO_LARGE`, `DOMAIN_MISMATCH`, `BAD_PASSWORD`,
+`EXPIRED`, `STRICT_TIME_UNAVAILABLE`, `EPOCH_RETIRED`, and `WASM_INIT_FAILED`.
+
+> **Deterministic sealing** (`deterministic_salt` / `deterministic_nonce` /
+> `deterministic_epoch`) exists only for conformance vectors (spec 08). Leave them
+> `None` in application code so every link gets fresh randomness.
+
 ## Packages
 
 | Package | Purpose | Docs |

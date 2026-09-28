@@ -1,10 +1,14 @@
 /**
  * URL/QR budget test (spec 08 § URL/QR budget test).
  *
- * Max-size v1 payload (255 B data, password, expiry) must:
+ * A QR-friendly payload (255 B data, password, expiry) must:
  *   - produce a final URL ≤ 512 bytes (spec 01 QR advisory), and
  *   - render a QR that decodes back to the exact same URL (zxing-equivalent
  *     roundtrip via `jsqr`, a pure-JS decoder — no canvas/native deps).
+ *
+ * 255 B is no longer the v1 payload cap (the envelope now uses a u32 length
+ * prefix), but it remains the largest payload that keeps the share URL within
+ * the 512-byte QR advisory budget.
  *
  * The QR is rasterized from the module matrix produced by `qrcode` into a
  * plain RGBA buffer, so the whole test runs in Node with no DOM.
@@ -37,8 +41,8 @@ beforeAll(async () => {
 
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/** Exactly 255 bytes — the v1 payload cap (spec 01). */
-function maxPayload(): string {
+/** 255 bytes — the largest payload that stays within the 512-byte QR budget. */
+function qrBudgetPayload(): string {
   let s = "";
   while (s.length < 255) s += B64URL;
   return s.slice(0, 255);
@@ -80,9 +84,9 @@ function rasterize(
 }
 
 describe("URL/QR budget (spec 08)", () => {
-  it("max v1 payload (255 B + password + expiry) → URL ≤ 512 bytes", () => {
+  it("QR-friendly payload (255 B + password) → URL ≤ 512 bytes", () => {
     const fragment = wasm.sealDeterministic(
-      maxPayload(),
+      qrBudgetPayload(),
       "hunter2",
       null, // exp omitted: expiry is inside the payload, not the URL size driver
       1,
@@ -97,9 +101,9 @@ describe("URL/QR budget (spec 08)", () => {
   });
 
   it("expiry does not grow the URL (exp lives inside the AEAD payload)", () => {
-    const noExp = wasm.sealDeterministic(maxPayload(), "hunter2", null, 1, SALT, NONCE, null);
+    const noExp = wasm.sealDeterministic(qrBudgetPayload(), "hunter2", null, 1, SALT, NONCE, null);
     const withExp = wasm.sealDeterministic(
-      maxPayload(),
+      qrBudgetPayload(),
       "hunter2",
       2_000_000_000,
       1,
@@ -112,7 +116,7 @@ describe("URL/QR budget (spec 08)", () => {
   });
 
   it("QR roundtrip decodes to the exact same URL", () => {
-    const fragment = wasm.sealDeterministic(maxPayload(), "hunter2", null, 1, SALT, NONCE, null);
+    const fragment = wasm.sealDeterministic(qrBudgetPayload(), "hunter2", null, 1, SALT, NONCE, null);
     const url = `${BASE}#ms=${fragment}`;
 
     // Low error-correction keeps the module count (and thus QR version) small.
@@ -125,8 +129,8 @@ describe("URL/QR budget (spec 08)", () => {
     expect(decoded!.data).toBe(url);
   });
 
-  it("a scan-sane QR (version ≤ 20) for the max payload", () => {
-    const fragment = wasm.sealDeterministic(maxPayload(), "hunter2", null, 1, SALT, NONCE, null);
+  it("a scan-sane QR (version ≤ 20) for the QR-friendly payload", () => {
+    const fragment = wasm.sealDeterministic(qrBudgetPayload(), "hunter2", null, 1, SALT, NONCE, null);
     const url = `${BASE}#ms=${fragment}`;
     const qr = QRCode.create(url, { errorCorrectionLevel: "L" });
     // Version ≈ (size - 17) / 4; ≤ 20 keeps it comfortably scannable.

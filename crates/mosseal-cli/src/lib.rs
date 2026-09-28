@@ -303,7 +303,7 @@ mod tests {
     #[test]
     fn seal_rejects_payload_over_cap() {
         let ctx = context_from(&b64_secret(7), vec!["a.test".into()]).unwrap();
-        let big = "x".repeat(256);
+        let big = "x".repeat(mosseal_core::MAX_PAYLOAD_BYTES + 1);
         assert!(seal_fragment(&ctx, big, None, None).is_err());
     }
 }

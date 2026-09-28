@@ -16,12 +16,12 @@
 //! 33      var   ciphertext    AES-256-GCM over inner payload (incl. 16B tag)
 //! ```
 //!
-//! Inner payload (what gets encrypted; also length-prefixed binary, u8 data len):
+//! Inner payload (what gets encrypted; also length-prefixed binary, u32 data len):
 //!
 //! ```text
 //! kind : u8          0x01 = token, 0x02 = binary_blob
 //! exp  : u64 LE      unix seconds, 0 = no expiry
-//! data_len : u8
+//! data_len : u32 LE
 //! data : [u8; data_len]
 //! ```
 
@@ -88,22 +88,22 @@ impl Payload {
             return Err(MossealError::new(
                 ErrorCode::PayloadTooLarge,
                 format!(
-                    "{} bytes exceeds v1 cap of {}",
+                    "{} bytes exceeds cap of {}",
                     self.data.len(),
                     crate::MAX_PAYLOAD_BYTES
                 ),
             ));
         }
-        let mut out = Vec::with_capacity(1 + 8 + 1 + self.data.len());
+        let mut out = Vec::with_capacity(1 + 8 + 4 + self.data.len());
         out.push(self.kind);
         out.extend_from_slice(&self.exp.to_le_bytes());
-        out.push(self.data.len() as u8);
+        out.extend_from_slice(&(self.data.len() as u32).to_le_bytes());
         out.extend_from_slice(&self.data);
         Ok(out)
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() < 1 + 8 + 1 {
+        if bytes.len() < 1 + 8 + 4 {
             return Err(MossealError::new(
                 ErrorCode::MalformedEnvelope,
                 "payload truncated",
@@ -111,8 +111,13 @@ impl Payload {
         }
         let kind = bytes[0];
         let exp = u64::from_le_bytes(bytes[1..9].try_into().unwrap());
-        let data_len = bytes[9] as usize;
-        if bytes.len() != 10 + data_len {
+        let data_len = u32::from_le_bytes(bytes[9..13].try_into().unwrap()) as usize;
+        // `checked_add` guards against a hostile u32 length overflowing usize
+        // on 32-bit targets (would otherwise panic in debug builds).
+        let expected = 13usize.checked_add(data_len).ok_or_else(|| {
+            MossealError::new(ErrorCode::MalformedEnvelope, "payload length overflow")
+        })?;
+        if bytes.len() != expected {
             return Err(MossealError::new(
                 ErrorCode::MalformedEnvelope,
                 "payload length mismatch",
@@ -121,7 +126,7 @@ impl Payload {
         Ok(Payload {
             kind,
             exp,
-            data: bytes[10..].to_vec(),
+            data: bytes[13..].to_vec(),
         })
     }
 }
@@ -286,7 +291,7 @@ mod tests {
         let big = Payload {
             kind: kind::TOKEN,
             exp: 0,
-            data: vec![7u8; 256],
+            data: vec![7u8; crate::MAX_PAYLOAD_BYTES + 1],
         };
         assert!(matches!(
             big.encode().unwrap_err().code,

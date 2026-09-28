@@ -22,7 +22,7 @@
         "nonce": "020202020202020202020202",
         "salt": "01010101010101010101010101010101"
       },
-      "expectFragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+      "expectFragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
       "expectOpen": {
         "data": "tok_abc123",
         "exp": 0,
@@ -44,7 +44,7 @@
         "nonce": "040404040404040404040404",
         "salt": "03030303030303030303030303030303"
       },
-      "expectFragment": "AQICEAMDAwMDAwMDAwMDAwMDAwMMBAQEBAQEBAQEBAQEmcmk5Li3IdoCJkbKza6aX1WBiphuJqYN6bkxmkjW-8agoIdY",
+      "expectFragment": "AQICEAMDAwMDAwMDAwMDAwMDAwMMBAQEBAQEBAQEBAQEmcmk5Li3IdoCJjKlpoWUVmnR2sj81o2SaSOYOwM1MlJXeJ7aSI7c",
       "expectOpen": {
         "data": "tok_abc123",
         "exp": 1700003600,
@@ -66,7 +66,7 @@
         "nonce": "060606060606060606060606",
         "salt": "05050505050505050505050505050505"
       },
-      "expectFragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5eU4Mx_paJRBjMw0RLqcO6nTnmF3tksBnkYA",
+      "expectFragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5ZFXWDTnYagR3Jz_ZFN1iA6aeaKMXXyxfss9UbXq",
       "expectOpen": {
         "data": "tok_abc123",
         "exp": 0,
@@ -88,7 +88,7 @@
         "nonce": "080808080808080808080808",
         "salt": "07070707070707070707070707070707"
       },
-      "expectFragment": "AQMCEAcHBwcHBwcHBwcHBwcHBwcMCAgICAgICAgICAgIDr0gMAV1sjzMM8o5fX3giqcXYoehD5JJhNZrcdGJxZtdPgDA",
+      "expectFragment": "AQMCEAcHBwcHBwcHBwcHBwcHBwcMCAgICAgICAgICAgIDr0gMAV1sjzMM75WFlbug5tHMtebxEDA76OFP8rl_XxWW998Z1yt",
       "expectOpen": {
         "data": "tok_abc123",
         "exp": 1700003600,
@@ -110,7 +110,7 @@
         "nonce": "0a0a0a0a0a0a0a0a0a0a0a0a",
         "salt": "09090909090909090909090909090909"
       },
-      "expectFragment": "AQACEAkJCQkJCQkJCQkJCQkJCQkMCgoKCgoKCgoKCgoKOiBNi4rdAYapdvW8tnIWNt7m-MLtHBdvo0kq9kxA0Fs856WR",
+      "expectFragment": "AQACEAkJCQkJCQkJCQkJCQkJCQkMCgoKCgoKCgoKCgoKOiBNi4rdAYapdobI13UHesjvusL2EHncjp8zVv0LK6tR-J94gIXb",
       "expectOpen": {
         "data": "state-blob",
         "exp": 0,
@@ -132,7 +132,7 @@
         "nonce": "0c0c0c0c0c0c0c0c0c0c0c0c",
         "salt": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
       },
-      "expectFragment": "AQACEAsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMDAwMfgFyn_S_ZLsXVGd-B2yxTVKem90CGM8I8NE-LrpVD3s6ZnPB",
+      "expectFragment": "AQACEAsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMDAwMfgFyn_S_ZLsXVBMRbEe7VmKYg4BURxlCWBnD0pB8VC-Rhag1m_83",
       "expectOpen": {
         "data": "tok_epoch2",
         "exp": 0,
@@ -154,7 +154,7 @@
         "nonce": "0e0e0e0e0e0e0e0e0e0e0e0e",
         "salt": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
       },
-      "expectFragment": "AQACEA0NDQ0NDQ0NDQ0NDQ0NDQ0MDg4ODg4ODg4ODg4OVB5eVvixX6331bOD0ZyByjYVBdRpAaDGLqM",
+      "expectFragment": "AQACEA0NDQ0NDQ0NDQ0NDQ0NDQ0MDg4ODg4ODg4ODg4OVB5eVvixX6331YT2M1DC8G0arf6Jsq1KSAyTtnE",
       "expectOpen": {
         "data": "",
         "exp": 0,
@@ -176,7 +176,7 @@
         "nonce": "101010101010101010101010",
         "salt": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
       },
-      "expectFragment": "AQACEA8PDw8PDw8PDw8PDw8PDw8MEBAQEBAQEBAQEBAQAkR27gyyVrXAmfSwwjLu9vMEnodxhfON8Y4HUygA4SNk2iQi2A",
+      "expectFragment": "AQACEA8PDw8PDw8PDw8PDw8PDw8MEBAQEBAQEBAQEBAQAkR27gyyVrXAmYBzdC3u6fbq1XXPLwSR21gQFS_NbaXIp67KvZCcuA",
       "expectOpen": {
         "data": "tökén-✓",
         "exp": 0,
@@ -196,7 +196,7 @@
       "expectError": "BAD_PASSWORD",
       "name": "wrong-password",
       "open": {
-        "fragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5eU4Mx_paJRBjMw0RLqcO6nTnmF3tksBnkYA",
+        "fragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5ZFXWDTnYagR3Jz_ZFN1iA6aeaKMXXyxfss9UbXq",
         "nowSecs": null,
         "password": "WRONG"
       },
@@ -206,7 +206,7 @@
       "expectError": "BAD_PASSWORD",
       "name": "missing-password",
       "open": {
-        "fragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5eU4Mx_paJRBjMw0RLqcO6nTnmF3tksBnkYA",
+        "fragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5ZFXWDTnYagR3Jz_ZFN1iA6aeaKMXXyxfss9UbXq",
         "nowSecs": null,
         "password": null
       },
@@ -216,7 +216,7 @@
       "expectError": "EXPIRED",
       "name": "expired",
       "open": {
-        "fragment": "AQICEBEREREREREREREREREREREMEhISEhISEhISEhISG8wKoqGhwBx3FXo9BJ7-rpT7WB04QzgP5rbp3A9t0Kv_PcjJ",
+        "fragment": "AQICEBEREREREREREREREREREREMEhISEhISEhISEhISG8wKoqGhwBx3FQ5Sb7Xwp6irCE0G3JapFdksWhKQbexQf0xzH5Cn",
         "nowSecs": 1700000000.0,
         "password": null
       },
@@ -246,7 +246,7 @@
       "expectError": "UNSUPPORTED_VERSION",
       "name": "unsupported-version",
       "open": {
-        "fragment": "AgACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+        "fragment": "AgACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
         "nowSecs": null,
         "password": null
       },
@@ -256,7 +256,7 @@
       "expectError": "EPOCH_RETIRED",
       "name": "epoch-retired",
       "open": {
-        "fragment": "AQAFEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+        "fragment": "AQAFEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
         "nowSecs": null,
         "password": null
       },
@@ -266,7 +266,7 @@
       "expectError": "EPOCH_RETIRED",
       "name": "epoch-retired-hole",
       "open": {
-        "fragment": "AQABEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav",
+        "fragment": "AQABEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
         "nowSecs": null,
         "password": null
       },
@@ -276,7 +276,7 @@
       "expectError": "MALFORMED_ENVELOPE",
       "name": "tampered-ciphertext",
       "open": {
-        "fragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaau",
+        "fragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89t",
         "nowSecs": null,
         "password": null
       },
@@ -286,7 +286,7 @@
       "expectError": "UNSUPPORTED_KIND",
       "name": "unsupported-kind",
       "open": {
-        "fragment": "AQACEBMTExMTExMTExMTExMTExMMFBQUFBQUFBQUFBQUJyt7R94qLGpyr7k2Ra0PufG7k9Sku8_2_0k-hI8",
+        "fragment": "AQACEBMTExMTExMTExMTExMTExMMFBQUFBQUFBQUFBQUJyt7R94qLGpyr81ZLqpMhYQDD5yLMZfwU2qJwSlhGA4",
         "nowSecs": null,
         "password": null
       },
@@ -295,7 +295,7 @@
     {
       "expectError": "PAYLOAD_TOO_LARGE",
       "input": {
-        "dataLen": 256,
+        "dataLen": 4097,
         "expSecs": null,
         "kind": 1,
         "password": null

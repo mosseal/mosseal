@@ -68,8 +68,12 @@ impl ErrorCode {
     }
 }
 
-/// Max `data` bytes permitted in v1 envelopes (u8 length prefix, spec 01).
-pub const MAX_PAYLOAD_BYTES: usize = 255;
+/// Max `data` bytes permitted in v1 envelopes (u32 length prefix, spec 01).
+///
+/// The wire format itself allows up to `u32::MAX`, but this cap keeps links
+/// within practical URL/QR budgets. The URL layer additionally warns (advisory,
+/// not an error) once the final share URL exceeds 512 bytes.
+pub const MAX_PAYLOAD_BYTES: usize = 4096;
 
 /// Envelope format version byte for v1 (spec 01).
 pub const ENVELOPE_VERSION: u8 = 1;

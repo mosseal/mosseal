@@ -56,7 +56,8 @@ fixed-layout encode; JSON is rejected to save space):
 |---|---|---|
 | `kind` | u8 enum | `0x01 = token`, `0x02 = binary_blob` |
 | `exp` | u64 seconds-or-0 | Unix epoch UTC; `0` = no expiry |
-| `data` | length-prefixed bytes | the secret material |
+| `data_len` | u32 LE | byte length of `data` |
+| `data` | `[u8; data_len]` | the secret material |
 
 `exp` sits **inside** the AEAD-protected region, so it is tamper-proof (modifying it breaks the
 GCM tag). Enforcement is separate — see 07.
@@ -80,6 +81,8 @@ GCM tag). Enforcement is separate — see 07.
 
 ## Open items (decided within this spec)
 
-- Length prefixes are u8 for `kind`-specific data up to 255 bytes in v1; larger app-state blobs
-  need a v2 envelope with u32 lengths. v1 must therefore hard-cap `data` at 255 bytes and the
-  seal API errors with `PAYLOAD_TOO_LARGE` beyond that.
+- The `data` length prefix is a **u32** (little-endian), so the wire format itself permits payloads
+  up to `u32::MAX`. The seal API still enforces a practical `MAX_PAYLOAD_BYTES` cap (4096 bytes)
+  and errors with `PAYLOAD_TOO_LARGE` beyond it, keeping links within URL/QR budgets. The URL
+  layer additionally emits an **advisory** warning (not an error) once the final share URL exceeds
+  512 bytes.

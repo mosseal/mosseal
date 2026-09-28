@@ -404,7 +404,7 @@ mod tests {
     fn payload_cap_enforced_at_seal() {
         let c = ctx();
         let input = SealInput {
-            data: vec![0u8; 256],
+            data: vec![0u8; MAX_PAYLOAD_BYTES + 1],
             ..sample(kind::TOKEN, None, None)
         };
         let err = c.seal(&input).unwrap_err();

@@ -48,7 +48,7 @@ const result = await seal.openFromUrl(location.href, { password? });
 | `kind` | Byte | Meaning |
 |---|---|---|
 | `"token"` | `0x01` | A secret token / credential (default). |
-| `"binary_blob"` | `0x02` | A small app-state blob (still ≤ 255 B in v1). |
+| `"binary_blob"` | `0x02` | A small app-state blob (subject to the `MAX_PAYLOAD_BYTES` cap). |
 
 Both are supported v1 kinds. An unknown kind byte on open → `UNSUPPORTED_KIND`.
 

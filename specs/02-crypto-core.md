@@ -167,7 +167,7 @@ pub fn register_time_fetcher(fetch: js_sys::Function);
 | `MALFORMED_ENVELOPE` | envelope decoding / base64 |
 | `UNSUPPORTED_VERSION` | version mismatch |
 | `UNSUPPORTED_KIND` | payload kind unknown to this build |
-| `PAYLOAD_TOO_LARGE` | payload exceeds 255 B cap |
+| `PAYLOAD_TOO_LARGE` | payload exceeds the `MAX_PAYLOAD_BYTES` cap (4096 B) |
 | `DOMAIN_MISMATCH` | binding check |
 | `BAD_PASSWORD` | GCM tag failure in password mode |
 | `EXPIRED` | time check |

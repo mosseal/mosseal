@@ -371,10 +371,10 @@ pub fn build() -> Value {
         "UNSUPPORTED_KIND",
     ));
 
-    // PAYLOAD_TOO_LARGE: 256-byte payload exceeds the v1 cap.
+    // PAYLOAD_TOO_LARGE: one byte over the v1 cap.
     vectors.push(seal_error_vector(
         "payload-too-large",
-        256,
+        mosseal_core::MAX_PAYLOAD_BYTES + 1,
         "PAYLOAD_TOO_LARGE",
     ));
 

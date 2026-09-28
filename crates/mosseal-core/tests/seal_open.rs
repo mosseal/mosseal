@@ -70,7 +70,7 @@ fn input(kind_byte: u8, exp: Option<u64>, password: Option<&str>) -> SealInput {
 /// Spec 08 § conformance: the exact fragment the vectors crate records for
 /// `token-nopass-exp0`. If this drifts, the wire format or KDF changed.
 const GOLDEN_TOKEN_NOPASS_EXP0: &str =
-    "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSHMJ7INvGivLo-heynSBhPCEmH_hmrPlVaav";
+    "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s";
 
 #[test]
 fn golden_fragment_is_stable() {
@@ -214,7 +214,7 @@ fn error_taxonomy_is_reachable_via_public_api() {
 
     // PAYLOAD_TOO_LARGE — seal over the v1 cap.
     let oversized = SealInput {
-        data: vec![0u8; 256],
+        data: vec![0u8; mosseal_core::MAX_PAYLOAD_BYTES + 1],
         ..input(kind::TOKEN, None, None)
     };
     assert_eq!(

@@ -84,8 +84,10 @@ strict is a compile-time flag, spec 07) with the fixed test secrets, then bundle
 
 ## URL/QR budget test
 
-Max-size v1 payload (255 B data, password) → assert final URL ≤ 512 B and a
+QR-friendly payload (255 B data, password) → assert final URL ≤ 512 B and a
 `qrcode`/`jsqr` decode roundtrip reproduces the exact URL (Node, no canvas).
+255 B is no longer the v1 cap (the envelope uses a u32 length prefix) but is the
+largest payload that keeps the share URL within the 512-byte QR advisory budget.
 
 ## Negative/UX tests
 
