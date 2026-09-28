@@ -41,11 +41,32 @@ export interface ToolchainProbe {
   rustc: ToolchainItem;
   wasmPack: ToolchainItem;
   wasmTarget: ToolchainItem;
+  /** Present only when the caller opted into the network probe (`--network`). */
+  network?: ToolchainItem;
 }
 
 export interface DoctorReport {
   ok: boolean;
   lines: string[];
+}
+
+/** Default time source used as the reachability probe (spec 07). */
+const NETWORK_PROBE_URL = "https://cloudflare.com/cdn-cgi/trace";
+
+/**
+ * Optional network-reachability probe (spec 05 § doctor). Off by default so
+ * `doctor` stays fast and air-gapped-CI-safe; the CLI enables it with
+ * `--network`. Never throws.
+ */
+export async function probeNetwork(timeoutMs = 4000): Promise<ToolchainItem> {
+  try {
+    const res = await fetch(NETWORK_PROBE_URL, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, version: res.ok ? "reachable" : null };
+  } catch {
+    return { ok: false };
+  }
 }
 
 /**
@@ -109,6 +130,14 @@ export function doctorReport(probe: ToolchainProbe = probeToolchain()): DoctorRe
     probe.wasmTarget,
     "Run: rustup target add wasm32-unknown-unknown"
   );
+  if (probe.network) {
+    check(
+      "network reachability (time sources)",
+      probe.network,
+      "Time sources are unreachable — strict-time builds will fail open() " +
+        "without net time (spec 07). Check egress/proxy settings."
+    );
+  }
 
   return { ok, lines };
 }

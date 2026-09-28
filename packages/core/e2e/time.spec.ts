@@ -10,6 +10,7 @@ import { test, expect } from "@playwright/test";
 import {
   openHarness,
   mockTimeSources,
+  mockTimeSourcesPerHost,
   mockCustomTimeSource,
   TOKEN,
   WHITELISTED,
@@ -100,10 +101,62 @@ test.describe("net-time matrix (spec 07)", () => {
 });
 
 /**
- * N1: the baked `MOSSEAL_TIME_SOURCES` override must be the list the wasm
+ * Cross-source drift sanity (spec 07 § optional v1.1): strict mode refuses when
+ * reachable sources disagree by more than 90 s; lenient mode keeps first-success.
+ */
+test.describe("cross-source drift sanity (spec 07 v1.1)", () => {
+  test("strict + sources disagree > 90 s → STRICT_TIME_UNAVAILABLE", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await openHarness(ctx, HOST, { variant: "strict" });
+    // cloudflare and timeapi agree; worldtimeapi is 200 s off.
+    await mockTimeSourcesPerHost(page, {
+      "cloudflare.com": NOW,
+      "timeapi.io": NOW,
+      "worldtimeapi.org": NOW + 200,
+    });
+    const fragment = await sealExpiring(page, NOW + 3600);
+    const res = await page.evaluate((f) => window.__mosseal!.openFragment(f), fragment);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("STRICT_TIME_UNAVAILABLE");
+    await ctx.close();
+  });
+
+  test("strict + sources agree within tolerance → opens", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await openHarness(ctx, HOST, { variant: "strict" });
+    await mockTimeSourcesPerHost(page, {
+      "cloudflare.com": NOW,
+      "timeapi.io": NOW + 5,
+      "worldtimeapi.org": NOW - 5,
+    });
+    const fragment = await sealExpiring(page, NOW + 3600);
+    const res = await page.evaluate((f) => window.__mosseal!.openFragment(f), fragment);
+    expect(res.ok).toBe(true);
+    await ctx.close();
+  });
+
+  test("lenient + sources disagree > 90 s → still opens (first success wins)", async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext();
+    const page = await openHarness(ctx, HOST, { variant: "lenient" });
+    await mockTimeSourcesPerHost(page, {
+      "cloudflare.com": NOW,
+      "timeapi.io": NOW,
+      "worldtimeapi.org": NOW + 200,
+    });
+    const fragment = await sealExpiring(page, NOW + 3600);
+    const res = await page.evaluate((f) => window.__mosseal!.openFragment(f), fragment);
+    expect(res.ok).toBe(true);
+    await ctx.close();
+  });
+});
+
+/**
+ * The baked `MOSSEAL_TIME_SOURCES` override must be the list the wasm
  * actually consults — the default hosts are never contacted (spec 07).
  */
-test.describe("custom time source (N1, spec 07)", () => {
+test.describe("custom time source (spec 07)", () => {
   test("the custom source is consulted, not the defaults", async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await openHarness(ctx, HOST, { variant: "custom" });

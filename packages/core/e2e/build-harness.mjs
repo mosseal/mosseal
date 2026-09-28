@@ -26,7 +26,7 @@ const force = process.argv.includes("--force");
 
 buildConformanceWasm({ target: "web", strict: false, force });
 buildConformanceWasm({ target: "web", strict: true, force });
-// N1: a variant with a baked `MOSSEAL_TIME_SOURCES` override, so the browser
+// A variant with a baked `MOSSEAL_TIME_SOURCES` override, so the browser
 // suite can prove a custom source is actually consulted (spec 07).
 buildConformanceWasm({
   variant: "web-custom",

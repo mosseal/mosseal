@@ -26,10 +26,10 @@ export { MossealError, MossealErrorCode, fromWasmError };
 export { isMossealUrl, scrubFragmentFromUrl };
 export type { LoaderInput, WasmExports };
 
-export type PayloadKind = "token" | "app_state";
+export type PayloadKind = "token" | "binary_blob";
 
 const KIND_TOKEN = 0x01;
-const KIND_APP_STATE = 0x02;
+const KIND_BINARY_BLOB = 0x02;
 
 export interface SealOptions {
   /** Secret material (token or small app-state blob). */
@@ -58,8 +58,8 @@ function kindToByte(kind: PayloadKind | undefined): number {
   switch (kind ?? "token") {
     case "token":
       return KIND_TOKEN;
-    case "app_state":
-      return KIND_APP_STATE;
+    case "binary_blob":
+      return KIND_BINARY_BLOB;
   }
 }
 
@@ -67,8 +67,8 @@ function byteToKind(b: number): PayloadKind {
   switch (b) {
     case KIND_TOKEN:
       return "token";
-    case KIND_APP_STATE:
-      return "app_state";
+    case KIND_BINARY_BLOB:
+      return "binary_blob";
     default:
       throw new MossealError(MossealErrorCode.UnsupportedKind);
   }

@@ -137,7 +137,7 @@ compile < 1 min after warm cargo cache.
 
 `.github/workflows/release.yml` (`workflow_dispatch`): runs the release consistency check
 (`node scripts/release.mjs --check`) and, in `bump` mode, the bump/regenerate script so a
-release cannot silently skip the manifest/vendored-crate/vectors steps (PLAN §N5).
+release cannot silently skip the manifest/vendored-crate/vectors steps.
 
 ## Static hosting notes
 

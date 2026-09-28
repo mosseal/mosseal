@@ -5,7 +5,7 @@
  */
 import { cmdInit, cmdRotate } from "./init.js";
 import { cmdBuild } from "./build.js";
-import { doctorReport } from "./toolchain.js";
+import { doctorReport, probeNetwork, probeToolchain } from "./toolchain.js";
 
 const USAGE = `mosseal — compile-time-injection builder for MOSSEAL (spec 05)
 
@@ -19,12 +19,14 @@ Flags:
   --dry-run               Validate/plan without writing files or building
   --cwd <dir>             Run in a different directory
   --out-dir <dir>         (build) override output dir (default ./mosseal-out)
+  --network               (doctor) also probe time-source reachability
 `;
 
 export interface CliOpts {
   cwd: string;
   dryRun: boolean;
   outDir?: string;
+  network?: boolean;
 }
 
 export async function run(argv: string[]): Promise<unknown> {
@@ -35,6 +37,7 @@ export async function run(argv: string[]): Promise<unknown> {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--dry-run") opts.dryRun = true;
+    else if (a === "--network") opts.network = true;
     else if (a === "--cwd") opts.cwd = args[++i];
     else if (a === "--out-dir") opts.outDir = args[++i];
     else if (a === "-h" || a === "--help") {
@@ -52,7 +55,9 @@ export async function run(argv: string[]): Promise<unknown> {
     case "rotate":
       return cmdRotate(opts);
     case "doctor": {
-      const report = doctorReport();
+      const probe = probeToolchain();
+      if (opts.network) probe.network = await probeNetwork();
+      const report = doctorReport(probe);
       for (const line of report.lines) console.log(line);
       if (!report.ok) process.exitCode = 1;
       return;

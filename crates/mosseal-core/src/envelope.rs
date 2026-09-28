@@ -19,7 +19,7 @@
 //! Inner payload (what gets encrypted; also length-prefixed binary, u8 data len):
 //!
 //! ```text
-//! kind : u8          0x01 = token, 0x02 = app_state_blob
+//! kind : u8          0x01 = token, 0x02 = binary_blob
 //! exp  : u64 LE      unix seconds, 0 = no expiry
 //! data_len : u8
 //! data : [u8; data_len]
@@ -41,7 +41,7 @@ pub mod flags {
 
 pub mod kind {
     pub const TOKEN: u8 = 0x01;
-    pub const APP_STATE: u8 = 0x02;
+    pub const BINARY_BLOB: u8 = 0x02;
 }
 
 /// Decoded outer envelope header + ciphertext. Header fields feed the AEAD

@@ -197,7 +197,7 @@ pub fn build() -> Value {
             open_time: Some(NOW),
         },
         Roundtrip {
-            name: "appstate-nopass-exp0",
+            name: "binaryblob-nopass-exp0",
             data: "state-blob",
             kind: 2,
             exp: None,

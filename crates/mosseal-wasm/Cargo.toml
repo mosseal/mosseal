@@ -34,7 +34,7 @@ obfuse.workspace = true
 version = "0.3"
 features = ["Window", "Location"]
 
-# wasm32 randomness feature activation (PLAN handoff blocker).
+# wasm32 randomness feature activation.
 #
 # These direct dependencies exist ONLY to turn on the required backend
 # features for the *shared transitive* getrandom instances via Cargo feature
@@ -50,10 +50,10 @@ getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 [dev-dependencies]
 wasm-bindgen-test.workspace = true
 
-# cargo-machete false positives (PLAN §N3). Each is required but not detected
+# cargo-machete false positives. Each is required but not detected
 # by textual search:
 #   obfuse                — referenced by the GENERATED `secrets.rs`, not the
-#                           committed placeholder (PLAN constraint 1).
+#                           committed placeholder (secrets flow through codegen).
 #   wasm-bindgen-futures  — needed by async `#[wasm_bindgen]` methods.
 #   getrandom/_02         — feature unification only (see the target-specific
 #                           block above); no code references them.

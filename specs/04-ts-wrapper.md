@@ -41,6 +41,17 @@ const result = await seal.openFromUrl(location.href, { password? });
 // → { data, exp, kind }   or throws MossealError with a stable code
 ```
 
+### Payload kinds
+
+`kind` is a string union mirroring the envelope `kind` byte (spec 01):
+
+| `kind` | Byte | Meaning |
+|---|---|---|
+| `"token"` | `0x01` | A secret token / credential (default). |
+| `"binary_blob"` | `0x02` | A small app-state blob (still ≤ 255 B in v1). |
+
+Both are supported v1 kinds. An unknown kind byte on open → `UNSUPPORTED_KIND`.
+
 ### `MossealError` codes (mirrors wasm taxonomy exactly)
 
 `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`, `UNSUPPORTED_KIND`, `PAYLOAD_TOO_LARGE`,

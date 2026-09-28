@@ -21,7 +21,7 @@ export const ALL_HOSTS = [...WHITELISTED, NOT_WHITELISTED];
 /** Default time sources (spec 07) — used by the wasm fetch bridge. */
 export const TIME_HOSTS = ["cloudflare.com", "timeapi.io", "worldtimeapi.org"] as const;
 
-/** Custom source host baked into the `web-custom` fixture (N1, spec 07). */
+/** Custom source host baked into the `web-custom` fixture (spec 07). */
 export const CUSTOM_TIME_HOST = "custom-time.test";
 
 export const TOKEN = "tok_browser_12345";
@@ -47,7 +47,7 @@ export interface HarnessApi {
 export interface OpenValue {
   data: string;
   exp: number;
-  kind: "token" | "app_state";
+  kind: "token" | "binary_blob";
 }
 
 declare global {
@@ -91,7 +91,7 @@ export async function waitForReady(page: Page): Promise<void> {
 /**
  * Open a page on `host` (fake origin), with harness routing installed.
  * @param variant which compiled harness to load; `strict` uses the strict-time
- *   build, `custom` uses the `MOSSEAL_TIME_SOURCES`-override build (N1)
+ *   build, `custom` uses the `MOSSEAL_TIME_SOURCES`-override build (spec 07)
  */
 export async function openHarness(
   context: BrowserContext,
@@ -178,4 +178,38 @@ export async function mockCustomTimeSource(
     });
   });
   return { requested };
+}
+
+/**
+ * Mock each default time source with a **different** time, to exercise the
+ * strict-mode cross-source drift sanity (spec 07 § optional v1.1). A `null`
+ * entry aborts that source.
+ */
+export async function mockTimeSourcesPerHost(
+  page: Page,
+  times: Partial<Record<(typeof TIME_HOSTS)[number], number | null>>
+): Promise<void> {
+  for (const host of TIME_HOSTS) {
+    const secs = times[host] ?? null;
+    await page.route(`https://${host}/**`, async (route: Route) => {
+      if (secs === null) {
+        await route.abort("failed");
+        return;
+      }
+      const body =
+        host === "cloudflare.com"
+          ? cloudflareBody(secs)
+          : host === "timeapi.io"
+            ? timeapiBody(secs)
+            : worldtimeBody(secs);
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "content-type": "text/plain",
+          "access-control-allow-origin": "*",
+        },
+        body,
+      });
+    });
+  }
 }

@@ -1,4 +1,4 @@
-# Release automation (spec 06, docs/versioning.md, PLAN §N5).
+# Release automation (spec 06, docs/versioning.md).
 #
 # The manual release checklist is error-prone: three manifests must move in
 # lockstep, the vendored mosseal-core crate is a packaged snapshot, and

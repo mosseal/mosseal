@@ -54,7 +54,7 @@ fixed-layout encode; JSON is rejected to save space):
 
 | Field | Type | Notes |
 |---|---|---|
-| `kind` | u8 enum | `0x01 = token`, `0x02 = binary_blob` (future) |
+| `kind` | u8 enum | `0x01 = token`, `0x02 = binary_blob` |
 | `exp` | u64 seconds-or-0 | Unix epoch UTC; `0` = no expiry |
 | `data` | length-prefixed bytes | the secret material |
 

@@ -28,7 +28,7 @@ const url = mosseal.generateShareUrl({
   data: "ghp_...",
   password: "optional",
   expSecs: 3600,          // omit/0 = never expires (offline-capable)
-  kind: "token",          // or "app_state"
+  kind: "token",          // or "binary_blob"
 });
 
 // Open a link on reception.

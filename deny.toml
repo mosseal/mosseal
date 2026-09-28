@@ -1,4 +1,4 @@
-# cargo-deny configuration (spec 06 § supply chain, PLAN §N3).
+# cargo-deny configuration (spec 06 § supply chain).
 #
 # Checks the resolved dependency graph for:
 #   - advisories: known security vulnerabilities (RustSec DB)
@@ -45,7 +45,7 @@ confidence-threshold = 0.9
 
 [bans]
 # A duplicate crate version is usually fine, but flag multiple major versions of
-# the crypto/randomness stack we care about (PLAN § Dependency policy).
+# the crypto/randomness stack we care about (see docs/development.md).
 multiple-versions = "warn"
 # Workspace-internal path deps (`mosseal-core = { path = "../mosseal-core" }`)
 # carry no version by design, and cargo-deny's `allow-wildcard-paths` only
@@ -53,13 +53,13 @@ multiple-versions = "warn"
 # still visible in the job log without failing on the intentional workspace ones.
 wildcards = "warn"
 deny = [
-    # The legacy stack we deliberately moved off (PLAN: obfstr/obfany → obfuse).
+    # The legacy stack we deliberately moved off (obfstr/obfany → obfuse).
     { name = "obfstr", reason = "replaced by obfuse (AEAD string encryption)" },
     { name = "obfany", reason = "replaced by obfuse (AEAD string encryption)" },
 ]
 skip = [
     # obfuse pulls legacy crypto-common/rand_core 0.6 → getrandom 0.2; the
-    # wasm crates activate its `js` feature (see PLAN § Dependency policy).
+    # wasm crates activate its `js` feature (see docs/development.md).
     { name = "getrandom", version = "0.2" },
     { name = "getrandom", version = "0.3" },
     { name = "rand_core", version = "0.6" },

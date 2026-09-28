@@ -126,5 +126,29 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 - **Spec 01** — URL shape amended to `#ms=<base64url(envelope)>` (the format `version`
   byte lives inside the binary envelope; the earlier `#ms=<version-char>.<b64url>` draft
   was dropped).
+- **`@mosseal/core` payload kind renamed** — the `0x02` kind is now `"binary_blob"`
+  (was `"app_state"`), aligning the TS union with spec 01's canonical name. **Breaking
+  for callers passing `kind: "app_state"`**; the wire byte (`0x02`) is unchanged, so
+  existing links still open. The Rust constant is `kind::BINARY_BLOB`.
+- **Strict-mode cross-source drift sanity** (spec 07 § optional v1.1) — strict mode now
+  parses every reachable time source and rejects with `STRICT_TIME_UNAVAILABLE` when two
+  disagree by more than 90 s, defending against a single spoofed source. Lenient mode is
+  unchanged (first success wins). `FetchTimes` gained `fetch_all_unix_secs` (defaulted,
+  so existing fetchers are unaffected).
+
+### Added
+
+- **`mosseal doctor --network`** — opt-in time-source reachability probe (spec 05). The
+  default `doctor` run stays fast and air-gapped-CI-safe; `--network` adds a check that
+  fails with a hint when the network is unreachable (strict-time builds would fail
+  `open()`).
+
+### Fixed
+
+- **Doc drift** — corrected stale statements that contradicted shipped code:
+  `MOSSEAL_TIME_SOURCES` is no longer described as "not yet wired" (spec 05), the URL
+  shape in specs 00/09 is `#ms=<base64url(envelope)>` (not `#ms=1.<...>`), spec 08's CI
+  table lists the `wasm-test` node+chrome matrix plus the `supply-chain`/`coverage` jobs,
+  and spec 01 no longer calls the `0x02` kind "(future)".
 
 [Unreleased]: https://example.com/mosseal/commits/main

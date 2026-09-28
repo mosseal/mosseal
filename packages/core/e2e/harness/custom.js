@@ -1,5 +1,5 @@
 /**
- * Custom time-source browser harness (N1, spec 07).
+ * Custom time-source browser harness (spec 07).
  *
  * Built from the `conformance-wasm-web-custom` fixture, whose generated
  * `secrets.rs` bakes a `MOSSEAL_TIME_SOURCES` override

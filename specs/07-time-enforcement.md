@@ -29,8 +29,12 @@ Fetch strategy (`Promise.any` with a short overall timeout, default 4 s):
 
 - `HEAD`-first optimization is abandoned (header exposure is unreliable); GET the small bodies.
 - Parse each to a Unix seconds value; accept the **first successful** source.
-- Optional (v1.1, not blocking): cross-source drift sanity — if two sources disagree by > 90 s,
-  reject with `STRICT_TIME_UNAVAILABLE` (defends single-source spoofing via local proxy).
+- **Cross-source drift sanity (strict mode only):** every reachable source is parsed
+  (`time::all_valid_times`); if two of them disagree by more than
+  `DRIFT_TOLERANCE_SECS` (90 s), strict mode rejects with `STRICT_TIME_UNAVAILABLE`
+  instead of trusting a possibly-spoofed source. Lenient mode keeps first-success
+  behavior. Fewer than two reachable sources is trivially consistent (nothing to
+  cross-check), so a single-source override is unaffected.
 
 Threat honesty: a local MITM proxy or patched `fetch` can still spoof all sources; this raises
 the bar above OS-clock tampering, it does not eliminate client-side time manipulation.
@@ -74,5 +78,7 @@ request-duration offset) to avoid refetching on every `open()` of multi-link imp
 
 - exp in future → opens; exp in past → `EXPIRED` (both with mocked net time).
 - Strict + blocked network → `STRICT_TIME_UNAVAILABLE`; lenient + blocked → opens via system clock.
+- Strict + sources disagreeing > 90 s → `STRICT_TIME_UNAVAILABLE`; lenient + same → opens
+  (first success wins).
 - `exp = 0` never triggers fetch (offline smoke test).
 - Source parser unit tests against pinned real response fixtures.

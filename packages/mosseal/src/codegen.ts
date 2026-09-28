@@ -1,5 +1,5 @@
 /**
- * `secrets.rs` codegen (spec 05 § `mosseal build`, PLAN constraint 1).
+ * `secrets.rs` codegen (spec 05 § `mosseal build`).
  *
  * `obfuse!` only accepts string literals, so secrets cannot flow through
  * `option_env!` — the builder generates a Rust source file embedding the
@@ -72,7 +72,7 @@ export function generateSecretsRs(
 // wasm-pack compiles; it must never be checked into version control.
 //
 // obfuse! only accepts string literals, which is why injection goes through
-// this generated file rather than env vars (PLAN constraint 1).
+// this generated file rather than env vars.
 //
 // Epoch secrets are joined by \`;\`; an EMPTY entry is a retired epoch (a
 // hole) — later epochs keep their index so their links keep opening.

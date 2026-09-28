@@ -85,7 +85,7 @@ fn golden_fragment_is_stable() {
 #[test]
 fn roundtrip_matrix() {
     let c = ctx();
-    for kind_byte in [kind::TOKEN, kind::APP_STATE] {
+    for kind_byte in [kind::TOKEN, kind::BINARY_BLOB] {
         for password in [None, Some("hunter2")] {
             for (exp, fetcher_now) in [(None, None), (Some(2_000u64), Some(1_000f64))] {
                 let frag = c

@@ -45,6 +45,11 @@ pub const FETCH_TIMEOUT_SECS: f64 = 4.0;
 /// Accept-skew on comparisons to tolerate source clock jitter (spec 07: 30 s).
 pub const ACCEPT_SKEW_SECS: f64 = 30.0;
 
+/// Strict-mode cross-source drift tolerance (spec 07 § optional v1.1): if two
+/// reachable sources disagree by more than this, strict mode refuses to open
+/// (`STRICT_TIME_UNAVAILABLE`) rather than trusting a possibly-spoofed source.
+pub const DRIFT_TOLERANCE_SECS: f64 = 90.0;
+
 /// Successful net time is cached for the page session (10 min TTL).
 pub const CACHE_TTL_SECS: f64 = 600.0;
 
@@ -166,6 +171,33 @@ pub fn first_valid_time(sources: &[TimeSource], bodies: &[Option<&str>]) -> Opti
     None
 }
 
+/// Parse **every** successfully-fetched source to Unix seconds (order-stable,
+/// failures dropped). Used by strict-mode cross-source drift sanity (spec 07
+/// § optional v1.1): the caller compares the spread of the returned values.
+pub fn all_valid_times(sources: &[TimeSource], bodies: &[Option<&str>]) -> Vec<f64> {
+    sources
+        .iter()
+        .zip(bodies.iter())
+        .filter_map(|(source, body)| {
+            let body = body.as_ref()?;
+            source.format.parse_unix_secs(body)
+        })
+        .collect()
+}
+
+/// Strict-mode drift check (spec 07 § optional v1.1): given the times parsed
+/// from every reachable source, return `true` when they are consistent within
+/// [`DRIFT_TOLERANCE_SECS`]. Fewer than two samples is trivially consistent
+/// (nothing to cross-check). A wide spread suggests a single spoofed source.
+pub fn drift_within_tolerance(times: &[f64]) -> bool {
+    if times.len() < 2 {
+        return true;
+    }
+    let min = times.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max = times.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    (max - min) <= DRIFT_TOLERANCE_SECS
+}
+
 /// Mode selected at compile time (spec 07 § Modes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeMode {
@@ -194,6 +226,15 @@ pub trait FetchTimes {
     /// Fetch all sources in parallel (or fail fast); return first success.
     fn fetch_unix_secs(&self, sources: &[TimeSource]) -> Option<f64>;
 
+    /// Fetch all sources and return **every** successfully-parsed time (order
+    /// stable, failures dropped). Used only for strict-mode cross-source drift
+    /// sanity (spec 07 § optional v1.1). The default derives from
+    /// [`FetchTimes::fetch_unix_secs`], so existing fetchers need no change and
+    /// simply report a single sample (drift is then trivially consistent).
+    fn fetch_all_unix_secs(&self, sources: &[TimeSource]) -> Vec<f64> {
+        self.fetch_unix_secs(sources).into_iter().collect()
+    }
+
     /// Platform system clock in Unix seconds.
     ///
     /// Defaults to [`system_clock_secs`] (std). The wasm layer MUST override
@@ -208,6 +249,10 @@ pub trait FetchTimes {
 impl<F: FetchTimes> FetchTimes for &F {
     fn fetch_unix_secs(&self, sources: &[TimeSource]) -> Option<f64> {
         (**self).fetch_unix_secs(sources)
+    }
+
+    fn fetch_all_unix_secs(&self, sources: &[TimeSource]) -> Vec<f64> {
+        (**self).fetch_all_unix_secs(sources)
     }
 
     fn system_now_secs(&self) -> f64 {
@@ -268,8 +313,23 @@ impl<F: FetchTimes> TimeResolver<F> {
                 return Ok(secs);
             }
         }
-        match self.fetcher.fetch_unix_secs(&self.sources) {
+        // One fetch call yields every reachable source's time (order-stable).
+        // The first entry is the spec-07 "first success wins" value; the whole
+        // set feeds strict-mode drift sanity. Fetchers that only implement
+        // `fetch_unix_secs` report a single sample via the trait default.
+        let all = self.fetcher.fetch_all_unix_secs(&self.sources);
+        match all.first().copied() {
             Some(secs) => {
+                // Strict-mode cross-source drift sanity (spec 07 § optional
+                // v1.1): if the reachable sources disagree by more than
+                // DRIFT_TOLERANCE_SECS, refuse rather than trust a possibly
+                // spoofed source. Lenient mode keeps first-success behavior.
+                if self.mode == TimeMode::Strict && !drift_within_tolerance(&all) {
+                    return Err(MossealError::new(
+                        ErrorCode::StrictTimeUnavailable,
+                        "time sources disagree beyond drift tolerance in strict mode",
+                    ));
+                }
                 self.cached = Some((self.fetcher.system_now_secs(), secs));
                 Ok(secs)
             }
@@ -469,6 +529,72 @@ mod tests {
         // later valid body still resolves.
         let bodies = [None, None, Some("{\"unixtime\":7}")];
         assert_eq!(first_valid_time(DEFAULT_TIME_SOURCES, &bodies), Some(7.0));
+    }
+
+    #[test]
+    fn all_valid_times_collects_every_success() {
+        let bodies = [
+            Some("ts=1000.0\n"),
+            Some("garbage"),
+            Some("{\"unixtime\":1040}"),
+        ];
+        assert_eq!(
+            all_valid_times(DEFAULT_TIME_SOURCES, &bodies),
+            vec![1000.0, 1040.0]
+        );
+        // All failed → empty (nothing to cross-check).
+        assert!(all_valid_times(DEFAULT_TIME_SOURCES, &[None, None, None]).is_empty());
+    }
+
+    #[test]
+    fn drift_within_tolerance_boundaries() {
+        // Fewer than two samples: trivially consistent.
+        assert!(drift_within_tolerance(&[]));
+        assert!(drift_within_tolerance(&[1000.0]));
+        // Exactly at the tolerance is accepted; just past it is not.
+        assert!(drift_within_tolerance(&[
+            1000.0,
+            1000.0 + DRIFT_TOLERANCE_SECS
+        ]));
+        assert!(!drift_within_tolerance(&[
+            1000.0,
+            1000.0 + DRIFT_TOLERANCE_SECS + 1.0
+        ]));
+        // Order-independent (min/max, not first/last).
+        assert!(!drift_within_tolerance(&[2000.0, 1000.0]));
+    }
+
+    /// Fetcher returning a fixed set of per-source times, so strict-mode drift
+    /// handling is observable.
+    struct DriftFetch(Vec<f64>);
+    impl FetchTimes for DriftFetch {
+        fn fetch_unix_secs(&self, _s: &[TimeSource]) -> Option<f64> {
+            self.0.first().copied()
+        }
+        fn fetch_all_unix_secs(&self, _s: &[TimeSource]) -> Vec<f64> {
+            self.0.clone()
+        }
+    }
+
+    #[test]
+    fn strict_mode_rejects_cross_source_drift() {
+        // Two sources 200 s apart → beyond the 90 s tolerance.
+        let mut r = TimeResolver::new(DriftFetch(vec![1000.0, 1200.0]), TimeMode::Strict);
+        let err = r.resolve().unwrap_err();
+        assert_eq!(err.code, ErrorCode::StrictTimeUnavailable);
+    }
+
+    #[test]
+    fn strict_mode_accepts_consistent_sources() {
+        let mut r = TimeResolver::new(DriftFetch(vec![1000.0, 1040.0]), TimeMode::Strict);
+        assert_eq!(r.resolve().unwrap(), 1000.0);
+    }
+
+    #[test]
+    fn lenient_mode_ignores_cross_source_drift() {
+        // Lenient keeps first-success even when sources disagree wildly.
+        let mut r = TimeResolver::new(DriftFetch(vec![1000.0, 9999.0]), TimeMode::Lenient);
+        assert_eq!(r.resolve().unwrap(), 1000.0);
     }
 
     #[test]

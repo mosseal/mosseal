@@ -52,7 +52,7 @@ URLs (including QR codes) on static hosts (GitHub Pages etc.), with no backend.
 ┌─────────────────────────────────────────────────────────▼─────────┐
 │ Consumer static site                                              │
 │  TS wrapper (@mosseal/core) ──▶ wasm: seal() / open()             │
-│  URL: https://site.example/#ms=1.<base64url(envelope)>             │
+│  URL: https://site.example/#ms=<base64url(envelope)>               │
 └───────────────────────────────────────────────────────────────────┘
 ```
 

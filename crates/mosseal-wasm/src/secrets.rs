@@ -19,7 +19,7 @@
 // indices (spec 02 § Key epochs).
 //
 // NOTE: obfuse! only accepts string literals, which is why injection goes
-// through this generated file rather than env vars (PLAN constraint 1).
+// through this generated file rather than env vars.
 
 /// Placeholder returning an empty registry so dev/test builds compile;
 /// `Mosseal::new` then fails with a clean `EPOCH_RETIRED`-family error.

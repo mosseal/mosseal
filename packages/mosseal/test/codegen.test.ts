@@ -1,5 +1,5 @@
 /**
- * `codegen.ts` tests (spec 05 § build step 3, PLAN constraint 1).
+ * `codegen.ts` tests (spec 05 § build step 3).
  *
  * `obfuse!` only accepts string literals, so the builder emits a Rust source
  * file. These tests pin the generated shape and the defense-in-depth escaping

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Release automation (PLAN §N5, spec 06, docs/versioning.md).
+ * Release automation (spec 06, docs/versioning.md).
  *
  * The manual 6-step release checklist is error-prone: three manifests must move
  * in lockstep, the vendored `mosseal-core` crate is a packaged snapshot that is

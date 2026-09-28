@@ -7,7 +7,7 @@
 //! Secrets are obfuscated at compile time with `obfuse!` (AEAD-encrypted,
 //! lazy-decrypted, zeroized-on-drop — replacing obfstr per D-decision).
 //!
-//! NOTE (PLAN constraint 1): there is deliberately NO `option_env!("MOSSEAL_EPOCHS")`
+//! NOTE: there is deliberately NO `option_env!("MOSSEAL_EPOCHS")`
 //! path here. `obfuse!` only accepts literals, so secrets cannot flow through
 //! env vars at compile time; the generated `secrets.rs` is the single canonical
 //! injection mechanism. The CLI builder writes it into the template copy it
@@ -217,8 +217,11 @@ struct OpenJs {
 /// success wins, overall timeout handled by the resolver budget.
 struct WebFetch;
 
-impl FetchTimes for WebFetch {
-    fn fetch_unix_secs(&self, sources: &[TimeSource]) -> Option<f64> {
+impl WebFetch {
+    /// Call the JS bridge once and return the raw per-source bodies
+    /// (order-stable; `None` for a failed source). Shared by both trait
+    /// methods so a resolve performs a single network round-trip.
+    fn fetch_bodies(sources: &[TimeSource]) -> Option<Vec<Option<String>>> {
         // The TS wrapper polyfills a sync bridge via `wasm-bindgen-rayon`-less
         // approach: fetch is async, so this sync trait is driven through a
         // JS-provided `mossealFetchTime` global registered by the wrapper.
@@ -231,13 +234,28 @@ impl FetchTimes for WebFetch {
             .call1(&JsValue::NULL, &serde_wasm_bindgen::to_value(&urls).ok()?)
             .ok()?;
         let res: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(res).ok()?;
-        // First (source_id, body) success parsed. Failed sources yield `null`
-        // (spec 07: order-stable array, first success wins across ALL
-        // sources) — skip them and keep trying, never abort the loop. The
-        // selection logic lives in core (`time::first_valid_time`) so it is
-        // natively tested.
-        let bodies: Vec<Option<&str>> = res.iter().map(|b| b.as_str()).collect();
-        mosseal_core::time::first_valid_time(sources, &bodies)
+        Some(res.iter().map(|b| b.as_str().map(str::to_string)).collect())
+    }
+}
+
+impl FetchTimes for WebFetch {
+    fn fetch_unix_secs(&self, sources: &[TimeSource]) -> Option<f64> {
+        // Failed sources yield `null` (spec 07: order-stable array, first
+        // success wins across ALL sources) — skip them and keep trying, never
+        // abort the loop. Selection lives in core (`time::first_valid_time`).
+        let bodies = Self::fetch_bodies(sources)?;
+        let refs: Vec<Option<&str>> = bodies.iter().map(|b| b.as_deref()).collect();
+        mosseal_core::time::first_valid_time(sources, &refs)
+    }
+
+    fn fetch_all_unix_secs(&self, sources: &[TimeSource]) -> Vec<f64> {
+        // Every reachable source's time, for strict-mode drift sanity
+        // (spec 07 § optional v1.1).
+        let Some(bodies) = Self::fetch_bodies(sources) else {
+            return Vec::new();
+        };
+        let refs: Vec<Option<&str>> = bodies.iter().map(|b| b.as_deref()).collect();
+        mosseal_core::time::all_valid_times(sources, &refs)
     }
 
     /// `std::time::SystemTime::now()` panics on wasm32-unknown-unknown, so the

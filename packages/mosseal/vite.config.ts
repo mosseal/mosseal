@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 /**
  * Vite 8 build for the `mosseal` CLI.
@@ -25,7 +25,7 @@ export default defineConfig({
   },
   test: {
     // Unit tests for env validation, .env merge/ignore, codegen escaping,
-    // and CLI dry-run behavior (spec 05 / PLAN handoff item 3).
+    // and CLI dry-run behavior (spec 05).
     include: ["test/**/*.test.ts"],
     environment: "node",
   },

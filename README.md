@@ -285,4 +285,5 @@ Detailed technical specifications can be found under `specs/`:
 Operational docs live under `docs/`:
 - [`docs/versioning.md`](docs/versioning.md) — Semver policy and the envelope-`version` byte
 - [`docs/epoch-rotation.md`](docs/epoch-rotation.md) — Key-epoch rotation & retirement runbook
+- [`docs/development.md`](docs/development.md) — Dependency policy, vendored-crate refresh, local checks
 

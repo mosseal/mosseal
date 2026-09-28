@@ -30,7 +30,7 @@ mosseal doctor    Check node / cargo / rustc / wasm-pack / wasm32 target
 ```
 
 Flags: `--dry-run` (validate/plan without writing or building), `--cwd <dir>`,
-`--out-dir <dir>` (build only).
+`--out-dir <dir>` (build only), `--network` (doctor: also probe time-source reachability).
 
 ## Quick start
 

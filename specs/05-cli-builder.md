@@ -23,7 +23,7 @@ mosseal doctor       # check rust/wasm-pack presence, versions, warnings
 | `MOSSEAL_ALLOWED_DOMAINS` | yes | comma list, exact-match hostnames (spec 03) |
 | `MOSSEAL_STRICT_TIME` | no | `true`/`false`, default `false` (spec 07) |
 | `MOSSEAL_ARGON2_PROFILE` | no | `minimum` (default) or `interactive` (spec 02) |
-| `MOSSEAL_TIME_SOURCES` | no | ⚠️ **validated but not yet wired** — see the divergence note below |
+| `MOSSEAL_TIME_SOURCES` | no | comma-separated `https://` URLs used **instead of** the three defaults (spec 07). Validated by `mosseal build`, then baked into the generated `secrets.rs` (`time_sources_str()`); empty = defaults. |
 
 > There is no `MOSSEAL_INTERNAL_SECRET`. An earlier draft used it for epoch 0; the epoch
 > list (`MOSSEAL_SECRET_<n>`) fully supersedes it and no code reads the name.
@@ -79,8 +79,10 @@ never committed.
 ## `mosseal doctor`
 
 Checks: node ≥ 20, cargo + rustc (prints `rustc -v`), wasm-pack presence/version, wasm32
-target installed (`rustup target list --installed`), network reachability (optional flag for
-offline CI).
+target installed (`rustup target list --installed`). Network reachability is **opt-in** via
+`--network` (probes the first default time source, spec 07) so the default run stays fast and
+air-gapped-CI-safe; when enabled, an unreachable network fails the report with a hint that
+strict-time builds will fail `open()`.
 
 ## Implementation
 

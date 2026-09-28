@@ -160,4 +160,31 @@ describe("doctorReport (pure, synthetic probe)", () => {
     expect(report.lines.join("\n")).toMatch(/wasm-pack/);
     expect(report.lines.join("\n")).toMatch(/rustwasm\.github\.io/);
   });
+
+  it("omits the network line unless a network probe is supplied", () => {
+    const base = {
+      node: { ok: true, version: "v22.0.0", required: ">=20" },
+      cargo: { ok: true, version: "cargo 1.85.0" },
+      rustc: { ok: true, version: "rustc 1.85.0" },
+      wasmPack: { ok: true, version: "wasm-pack 0.15.0" },
+      wasmTarget: { ok: true },
+    };
+    expect(doctorReport(base).lines.join("\n")).not.toMatch(/network reachability/);
+    const withNet = doctorReport({ ...base, network: { ok: true, version: "reachable" } });
+    expect(withNet.ok).toBe(true);
+    expect(withNet.lines.join("\n")).toMatch(/network reachability/);
+  });
+
+  it("fails the report when the network probe is unreachable", () => {
+    const report = doctorReport({
+      node: { ok: true, version: "v22.0.0", required: ">=20" },
+      cargo: { ok: true, version: "cargo 1.85.0" },
+      rustc: { ok: true, version: "rustc 1.85.0" },
+      wasmPack: { ok: true, version: "wasm-pack 0.15.0" },
+      wasmTarget: { ok: true },
+      network: { ok: false },
+    });
+    expect(report.ok).toBe(false);
+    expect(report.lines.join("\n")).toMatch(/network reachability/);
+  });
 });

@@ -100,7 +100,9 @@ Max-size v1 payload (255 B data, password) → assert final URL ≤ 512 B and a
 |---|---|---|
 | `rust-native` | fmt, clippy, test (incl. `fuzz_smoke`), vector-gen drift | ubuntu + windows |
 | `fuzz-smoke` | nightly `cargo fuzz` 60 s (`decode` + `open`) | ubuntu (nightly) |
-| `wasm-test` | `wasm-pack test --node` (wasm-bindgen unit tests: secrets parse, `JsError` contract, init failure) | ubuntu |
+| `supply-chain` | `cargo deny --all-features check` + `cargo machete` | ubuntu |
+| `coverage` | `cargo llvm-cov --workspace --summary-only` (report-only artifact) | ubuntu |
+| `wasm-test` | `wasm-pack test` matrix: `--node` **and** `--chrome --headless` (wasm-bindgen unit tests: secrets parse, `JsError` contract, init failure; the Chromium leg exercises `web_sys::window` hostname detection) | ubuntu (node + chrome) |
 | `wasm-node` | conformance wasm, vitest vs vectors, URL/QR budget, Argon2 timing | ubuntu |
 | `wasm-browser` | Playwright suite (build harness + chromium) | ubuntu (chromium) |
 | `packages` | CLI unit tests, npm pack --dry-run contents | ubuntu |

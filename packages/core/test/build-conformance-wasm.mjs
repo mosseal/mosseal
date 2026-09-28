@@ -39,7 +39,7 @@ const VECTORS = join(REPO_ROOT, "crates", "mosseal-vectors", "vectors.json");
  *  - node         → nodejs target + `conformance` feature (byte-exact vectors)
  *  - web-lenient  → web target, default lenient time mode (browser suite)
  *  - web-strict   → web target, `MOSSEAL_STRICT_TIME=true` (browser suite)
- *  - web-custom   → web target + a baked `MOSSEAL_TIME_SOURCES` override (N1)
+ *  - web-custom   → web target + a baked `MOSSEAL_TIME_SOURCES` override (spec 07)
  *
  * `MOSSEAL_STRICT_TIME` is a compile-time flag (spec 07), so the browser suite
  * needs a separate build per mode — the harness selects one via `?strict=1`.
@@ -51,7 +51,7 @@ const FIXTURE_DIRS = {
   "web-custom": join(CORE_ROOT, "test", "fixtures", "conformance-wasm-web-custom"),
 };
 
-/** Custom time source baked into the `web-custom` fixture (N1, spec 07). */
+/** Custom time source baked into the `web-custom` fixture (spec 07). */
 export const CUSTOM_TIME_SOURCE = "https://custom-time.test/api";
 
 /** Back-compat: the Node conformance suite's output dir. */
@@ -91,7 +91,7 @@ export function buildConformanceWasm({
     cpSync(TEMPLATE_DIR, tmp, { recursive: true });
 
     // Generated secrets.rs with the FIXED test secrets (spec 08). An explicit
-    // `timeSources` override is baked in for the N1 custom-source variant;
+    // `timeSources` override is baked in for the custom-source variant;
     // otherwise the literal is empty and the core defaults apply (spec 07).
     const timeSourcesLiteral = (timeSources ?? []).join(",");
     writeFileSync(

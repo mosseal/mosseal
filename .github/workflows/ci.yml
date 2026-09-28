@@ -59,9 +59,9 @@ jobs:
               working-directory: fuzz
               run: cargo fuzz run open -- -max_total_time=60
 
-    # Supply chain (spec 06, PLAN §N3): advisories, license allow-list, banned
-    # crates, and trusted sources. `cargo machete` re-confirms there are no
-    # unused direct dependencies (the manual audit in PLAN is now enforced).
+    # Supply chain (spec 06 § supply chain): advisories, license allow-list,
+    # banned crates, and trusted sources. `cargo machete` re-confirms there are
+    # no unused direct dependencies (the manual audit is now enforced).
     supply-chain:
         name: supply-chain
         runs-on: ubuntu-latest
@@ -78,9 +78,9 @@ jobs:
             - name: cargo machete (unused direct deps)
               run: cargo machete
 
-    # Coverage report (spec 08, PLAN §N2): report-only for now — it uploads the
-    # llvm-cov summary as an artifact but does NOT fail the build. A hard floor
-    # is a later decision once the suite is stable across a few PRs.
+    # Coverage report (spec 08 § Native coverage): report-only for now — it
+    # uploads the llvm-cov summary as an artifact but does NOT fail the build.
+    # A hard floor is a later decision once the suite is stable across a few PRs.
     coverage:
         name: coverage (report-only)
         runs-on: ubuntu-latest
@@ -105,7 +105,7 @@ jobs:
 
     # wasm-bindgen unit tests (spec 08): the wasm-ONLY surface that native tests
     # cannot reach — the generated-secrets parse path, the `JsError` machine-code
-    # contract, and the placeholder init failure. Two legs (PLAN §N4):
+    # contract, and the placeholder init failure. Two legs (spec 08 § CI layout):
     #   - node:   fast, no browser needed
     #   - chrome: exercises the browser-only paths (`web_sys::window` hostname
     #             detection in `Mosseal::new`) where they actually run

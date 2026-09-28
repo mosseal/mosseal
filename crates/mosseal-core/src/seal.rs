@@ -21,7 +21,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub struct SealInput {
     /// Secret material (token or small app-state blob).
     pub data: Vec<u8>,
-    /// Payload kind byte (spec 01; use [`kind::TOKEN`] / [`kind::APP_STATE`]).
+    /// Payload kind byte (spec 01; use [`kind::TOKEN`] / [`kind::BINARY_BLOB`]).
     pub kind: u8,
     /// Unix seconds; `None`/0 = no expiry (offline-capable link).
     pub exp: Option<u64>,
@@ -238,7 +238,7 @@ impl SealContext {
 
         let payload = Payload::decode(&pt)?;
         match payload.kind {
-            kind::TOKEN | kind::APP_STATE => {}
+            kind::TOKEN | kind::BINARY_BLOB => {}
             other => {
                 return Err(MossealError::new(
                     ErrorCode::UnsupportedKind,
@@ -412,11 +412,11 @@ mod tests {
     }
 
     #[test]
-    fn app_state_kind_roundtrip() {
+    fn binary_blob_kind_roundtrip() {
         let c = ctx();
-        let frag = c.seal(&sample(kind::APP_STATE, None, None)).unwrap();
+        let frag = c.seal(&sample(kind::BINARY_BLOB, None, None)).unwrap();
         let out = c.open(&frag, None, &NoFetch).unwrap();
-        assert_eq!(out.kind, kind::APP_STATE);
+        assert_eq!(out.kind, kind::BINARY_BLOB);
     }
 
     #[test]
@@ -512,16 +512,16 @@ mod tests {
     }
 
     #[test]
-    fn app_state_password_and_expiry_combined() {
+    fn binary_blob_password_and_expiry_combined() {
         let c = ctx();
         let frag = c
-            .seal(&sample(kind::APP_STATE, Some(2000), Some(b"pw".to_vec())))
+            .seal(&sample(kind::BINARY_BLOB, Some(2000), Some(b"pw".to_vec())))
             .unwrap();
         let bytes = envelope::b64::decode(&frag).unwrap();
         assert_eq!(bytes[1] & flags::PASSWORD, flags::PASSWORD);
         assert_eq!(bytes[1] & flags::EXPIRY, flags::EXPIRY);
         let out = c.open(&frag, Some(b"pw"), &FixedFetch(1000.0)).unwrap();
-        assert_eq!(out.kind, kind::APP_STATE);
+        assert_eq!(out.kind, kind::BINARY_BLOB);
         assert_eq!(out.exp, 2000);
     }
 
