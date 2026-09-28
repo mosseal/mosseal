@@ -1,0 +1,194 @@
+# Publish an already-released version to the public npm registry (npmjs).
+#
+# The GitHub Packages flow is the source of truth:
+#   release.yml            → publishes under the `next` dist-tag + drafts a Release
+#   release-published.yml  → promotes `next` → `latest` when the draft is published
+#
+# This workflow is the *second* registry. It is manual and gated: it refuses to
+# run unless `release-published` has already succeeded for the version — i.e. the
+# version is live on GitHub Packages under the `latest` dist-tag. It then
+# re-publishes the exact tarballs attached to the GitHub Release to npmjs, so both
+# registries serve byte-identical artifacts.
+#
+#   mode=check   (default): verify the gate only. No side effects.
+#   mode=publish:           download the Release tarballs and publish to npmjs.
+#
+# Auth uses npm **trusted publishing** (OIDC) — no long-lived token for normal
+# releases. The npm CLI detects the GitHub Actions OIDC environment and exchanges
+# it for a short-lived publish token. Provenance attestations are generated
+# automatically (public repo + public package).
+#
+# BOOTSTRAP: a trusted publisher can only be configured on a package that already
+# exists on npmjs.com, so the *first* publish of each package has no OIDC trust to
+# use. The publish step detects this (the package 404s on the registry) and falls
+# back to `secrets.NPM_TOKEN` for that one publish. After the first release:
+#   1. configure the trusted publisher on npmjs.com (see below), then
+#   2. revoke the NPM_TOKEN — it is only needed for the bootstrap.
+#
+# One-time setup on npmjs.com, per package (@mosseal/core AND @mosseal/cli):
+#   Package → Settings → Trusted Publisher → GitHub Actions, with:
+#     Organization or user: mosseal
+#     Repository:           mosseal
+#     Workflow filename:    release-npmjs.yml   (exact, case-sensitive, .yml)
+#     Allowed actions:      npm publish
+#   The workflow filename must match this file exactly, and `repository.url` in
+#   each package.json must match the GitHub repo (it does).
+#
+# Requires npm CLI >= 11.5.1 and Node >= 22.14 (this workflow uses Node 24).
+
+name: release-npmjs
+
+on:
+    workflow_dispatch:
+        inputs:
+            mode:
+                description: "check = verify the GitHub Packages release is live; publish = also publish to npmjs"
+                type: choice
+                options: [check, publish]
+                default: check
+
+jobs:
+    publish:
+        name: release-npmjs (${{ inputs.mode }})
+        # workflow_dispatch can be triggered from any branch; restrict to prod.
+        if: github.ref == 'refs/heads/prod'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read # download the Release tarballs
+            packages: read # read the GitHub Packages dist-tag in the gate
+            id-token: write # npm trusted publishing (OIDC) + provenance
+        steps:
+            # Full history so `scripts/release.mjs --check` and provenance have the
+            # commit context they expect.
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  # Points npm at npmjs; auth comes from OIDC, not a token.
+                  registry-url: https://registry.npmjs.org
+                  # Never cache in release builds.
+                  package-manager-cache: false
+
+            - name: consistency check
+              run: node scripts/release.mjs --check
+
+            - name: resolve version
+              id: version
+              run: |
+                  set -euo pipefail
+                  VERSION=$(node scripts/release.mjs --print)
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+                  echo "::notice::authoritative version: $VERSION"
+
+            # Gate: the version must already be live on GitHub Packages under the
+            # `latest` dist-tag, which only happens once `release-published` has
+            # promoted it. Two checks, both required:
+            #   1. the GitHub Release is published (not a draft) — this is the
+            #      event that fires release-published;
+            #   2. GitHub Packages serves $VERSION as `latest` — the observable
+            #      proof that release-published actually succeeded.
+            - name: verify GitHub Packages release is live
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  # GitHub Packages requires auth even for reads, so the dist-tag
+                  # check below authenticates with the workflow token.
+                  GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  VERSION="${{ steps.version.outputs.version }}"
+                  TAG="v$VERSION"
+
+                  # 1. The Release must be published (release-published fires on
+                  #    `release: published`; a draft means it has not run yet).
+                  IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+                  if [ "$IS_DRAFT" != "false" ]; then
+                    echo "::error::$TAG is still a draft — publish the Release first so release-published runs"
+                    exit 1
+                  fi
+                  echo "::notice::$TAG is published"
+
+                  # 2. GitHub Packages must serve $VERSION as `latest`. Auth via a
+                  #    temp npmrc so the repo's npm config is untouched.
+                  NPMRC="$(mktemp)"
+                  printf '//npm.pkg.github.com/:_authToken=%s\n' "$GITHUB_PACKAGES_TOKEN" > "$NPMRC"
+                  LATEST=$(NPM_CONFIG_USERCONFIG="$NPMRC" npm view @mosseal/core dist-tags.latest \
+                             --registry=https://npm.pkg.github.com)
+                  rm -f "$NPMRC"
+                  if [ "$LATEST" != "$VERSION" ]; then
+                    echo "::error::GitHub Packages latest is $LATEST, expected $VERSION — release-published may not have finished"
+                    exit 1
+                  fi
+                  echo "::notice::GitHub Packages latest = $VERSION"
+
+            # Reuse the reviewed tarballs from the GitHub Release rather than
+            # re-packing, so npmjs gets byte-identical artifacts.
+            - name: download Release tarballs
+              if: inputs.mode == 'publish'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  mkdir -p /tmp/npmjs
+                  gh release download "v${{ steps.version.outputs.version }}" \
+                    --pattern '*.tgz' \
+                    --dir /tmp/npmjs
+                  ls -l /tmp/npmjs
+
+            # Auth: trusted publishing (OIDC) for packages that already exist on
+            # npmjs; `NPM_TOKEN` only for the first-ever publish of a package
+            # (a trusted publisher cannot be configured before the package exists).
+            #
+            # `--registry` is REQUIRED: the tarballs carry
+            # `publishConfig.registry = https://npm.pkg.github.com`, and that
+            # overrides setup-node's `registry-url` (a userconfig value). Only the
+            # explicit CLI flag wins, so without it the publish would target
+            # GitHub Packages and OIDC auth would fail.
+            - name: publish to npmjs
+              if: inputs.mode == 'publish'
+              env:
+                  # Only used for the bootstrap path below; empty is fine otherwise.
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  VERSION="${{ steps.version.outputs.version }}"
+                  REGISTRY=https://registry.npmjs.org
+
+                  # Does the package exist on npmjs at all? (200 = yes, 404 = no).
+                  # Scoped names need the `/` percent-encoded in the registry URL.
+                  exists() {
+                    local code
+                    code=$(curl -s -o /dev/null -w '%{http_code}' \
+                      "$REGISTRY/${1//\//%2F}")
+                    [ "$code" = "200" ]
+                  }
+
+                  # Idempotent: skip a package whose version is already on npmjs,
+                  # so a re-run after a partial failure is safe.
+                  publish() {
+                    local name="$1" file="$2"
+                    if npm view "$name@$VERSION" version --registry="$REGISTRY" >/dev/null 2>&1; then
+                      echo "::notice::$name@$VERSION already on npmjs; skipping"
+                      return
+                    fi
+
+                    # Scoped packages default to restricted; `--access public`
+                    # overrides the tarball's GitHub Packages publishConfig.
+                    if exists "$name"; then
+                      echo "::notice::$name exists → trusted publishing (OIDC)"
+                      npm publish "$file" --access public --registry="$REGISTRY"
+                    else
+                      echo "::notice::$name is new → bootstrap publish with NPM_TOKEN"
+                      if [ -z "${NPM_TOKEN:-}" ]; then
+                        echo "::error::$name does not exist on npmjs and NPM_TOKEN is not set — cannot bootstrap the first publish"
+                        exit 1
+                      fi
+                      # Token auth does not get automatic provenance, so request it
+                      # explicitly (id-token: write is set above).
+                      NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish "$file" \
+                        --access public --registry="$REGISTRY" --provenance
+                    fi
+                  }
+                  publish @mosseal/core "/tmp/npmjs/mosseal-core-$VERSION.tgz"
+                  publish @mosseal/cli  "/tmp/npmjs/mosseal-cli-$VERSION.tgz"

@@ -99,6 +99,13 @@ node scripts/release.mjs --sync
    (`npm.pkg.github.com`, configured via `publishConfig`). *(scripted — the `release`
    workflow publishes both packages under the `next` dist-tag, then creates the draft
    Release)*
+7. Publish the draft Release — this promotes `next` → `latest` on GitHub Packages
+   (`release-published.yml`). *(manual — review the draft first)*
+8. Mirror the release to the **public npm registry** by running the `release-npmjs`
+   workflow (`workflow_dispatch`, `mode=publish`). It is gated on step 7 having
+   succeeded and re-publishes the Release's tarballs, so both registries serve
+   byte-identical artifacts. *(manual — see
+   [`development.md`](development.md#release-npmjsyml--mirror-to-the-public-npm-registry))*
 
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)
 reads the authoritative version, compares it to the latest `v*` git tag, and **skips
@@ -126,3 +133,22 @@ npm dist-tag add @mosseal/cli@<version> latest
 
 So the full flow is: run `release` → packages land under `next` → review the draft →
 publish the Release → `latest` moves automatically.
+
+### Mirroring to the public npm registry
+
+GitHub Packages is the source of truth, but it requires a token even for public
+installs. To also serve the release from the public npm registry (npmjs), run the
+`release-npmjs` workflow (`workflow_dispatch`, `mode=publish`) **after** the draft
+Release has been published.
+
+The workflow is gated: it refuses to run unless the version is already live on GitHub
+Packages under `latest` (i.e. `release-published` succeeded), and it re-publishes the
+**exact tarballs attached to the GitHub Release** rather than re-packing — so both
+registries serve byte-identical artifacts.
+
+Auth uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC),
+so there is no long-lived token for normal releases. The first-ever publish of a
+package falls back to the `NPM_TOKEN` secret, because a trusted publisher can only be
+configured on a package that already exists on npmjs. See
+[`development.md`](development.md#release-npmjsyml--mirror-to-the-public-npm-registry)
+for the one-time trusted-publisher setup and the bootstrap sequence.

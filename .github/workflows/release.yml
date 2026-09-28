@@ -41,14 +41,16 @@ jobs:
             packages: write
         steps:
             # Full history so `git tag` sees every release tag.
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
             - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v7
               with:
                   node-version: 24
+                  # Never cache in release builds.
+                  package-manager-cache: false
 
             - name: consistency check
               run: node scripts/release.mjs --check

@@ -485,7 +485,7 @@ The full taxonomy is `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`,
 | `mosseal-wasm` (crate) | wasm-bindgen bindings | `specs/02-crypto-core.md` |
 | `mosseal-cli` (crate) | Native admin CLI (`seal`/`open`/`gen-secret`) | `specs/02-crypto-core.md` |
 
-**Deploying to CI?** See [CI & Publishing](#ci--publishing) below, and the consumer
+**Deploying to CI?** See [`docs/development.md`](docs/development.md#ci--publishing), and the consumer
 GitHub Actions snippet in
 [`packages/mosseal/README.md`](packages/mosseal/README.md#consumer-ci-github-actions)
 (Rust toolchain + `rust-cache` + `jetli/wasm-pack-action`, secrets via env vars).
@@ -541,88 +541,6 @@ GitHub Actions snippet in
   contract, placeholder init failure).
 
 
-## CI & Publishing
-
-### Repository CI (`.github/workflows/ci.yml`)
-
-Runs on every push to `prod` and every pull request. Nine jobs:
-
-| Job | Runner | What it guards |
-|---|---|---|
-| `rust-native` | ubuntu + windows | `cargo fmt --check`, strict `clippy`, `cargo test --workspace` (incl. the deterministic `fuzz_smoke` suite), and the `vectors.json` drift tripwire. |
-| `fuzz-smoke` | ubuntu (nightly) | 60 s each on the `decode` / `open` `cargo fuzz` targets. |
-| `supply-chain` | ubuntu | `cargo deny` (advisories, license allow-list, banned crates, crates.io-only sources) + `cargo machete` (no unused direct deps). |
-| `coverage` | ubuntu | `cargo llvm-cov` summary uploaded as an artifact. **Report-only** — no floor yet. |
-| `wasm-test` | ubuntu (node + chrome) | `wasm-pack test` for the wasm-only surface; the Chromium leg exercises `web_sys::window` hostname detection. |
-| `wasm-node` | ubuntu | Builds the conformance wasm and runs the byte-exact vector suite + URL/QR budget + Argon2 timing. |
-| `wasm-browser` | ubuntu (chromium) | Playwright: cross-host portability, `DOMAIN_MISMATCH`, strict/lenient net-time matrix, custom `MOSSEAL_TIME_SOURCES`, no-fragment-leak assertion. |
-| `packages` | ubuntu | Builds both packages, runs the CLI unit tests, and packs the CLI (asserting the derived vendored crate lands in the tarball). |
-| `doctor-clean` | ubuntu (`node:22-bookworm`) | `mosseal doctor` + an end-to-end `init`/`build` from the **packed tarball** in a clean container. |
-
-Run the same checks locally before pushing:
-
-```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo run -p mosseal-vectors -- --check
-cargo deny --all-features check && cargo machete   # needs cargo-deny / cargo-machete
-```
-
-### Releasing (`.github/workflows/release.yml` + `scripts/release.mjs`)
-
-The release checklist is scripted so the lockstep manifest bump, the regenerated
-`vectors.json`, and the refreshed vendored crate cannot be skipped. Publishing itself
-stays manual (npm token, CHANGELOG entry, etc.).
-```bash
-# Verify every manifest agrees on one version (also run in CI):
-node scripts/release.mjs --check
-
-# Bump + regenerate (preview first with --dry-run):
-node scripts/release.mjs --version 0.2.0
-```
-
-`--version` updates the workspace `Cargo.toml`, both `package.json` files, and the
-template `Cargo.toml` (+ its vendored `mosseal-core-<ver>` path) in lockstep, then
-regenerates `vectors.json` and re-packages the vendored crate.
-
-The vendored `mosseal-core-<ver>.crate` is a **derived artifact and is not committed**;
-it is regenerated automatically by `npm pack`/`npm publish` (the `prepack` script) and
-on demand via `npm run sync:core`.
-
-The `release` workflow (`workflow_dispatch`) runs the consistency check and, in `bump`
-mode, executes the script and uploads the resulting diff as an artifact. In `release`
-mode it builds + packs both packages and creates a **draft GitHub Release** with the
-tarballs attached — review the draft, then publish to GitHub Packages manually.
-
-**Release steps:**
-
-1. Add a `CHANGELOG.md` entry under the new version heading. *(manual)*
-2. Run `node scripts/release.mjs --version <X.Y.Z>` (or the `release` workflow in `bump` mode).
-3. If the envelope layout changed, bump the `version` byte in `mosseal-core` and update spec 01. *(manual)*
-4. Review the regenerated `vectors.json` + vendored crate diff.
-5. Commit, tag `v<X.Y.Z>`, and publish both packages to **GitHub Packages**
-   (`npm.pkg.github.com`, set via `publishConfig`):
-   ```bash
-   (cd packages/core    && npm publish)
-   (cd packages/mosseal && npm publish)
-   ```
-   Consumers install from GitHub Packages (see
-   [`packages/mosseal/README.md`](packages/mosseal/README.md#install)).
-
-See [`docs/versioning.md`](docs/versioning.md) for the full semver + envelope-version policy.
-
-### Deploying a consumer site
-
-Compile-time injection means the Rust toolchain runs in **your** CI. The canonical
-GitHub Actions snippet (Rust toolchain + `Swatinem/rust-cache` +
-`jetli/wasm-pack-action`, secrets via env vars, `mosseal doctor` for fast failure) lives
-in [`packages/mosseal/README.md`](packages/mosseal/README.md#consumer-ci-github-actions).
-
-> **Windows runners:** always use `jetli/wasm-pack-action` (or `npx wasm-pack`), never
-> `curl … | sh`.
-
-
 ## Specifications
 
 Detailed technical specifications can be found under `specs/`:
@@ -639,5 +557,5 @@ Detailed technical specifications can be found under `specs/`:
 Operational docs live under `docs/`:
 - [`docs/versioning.md`](docs/versioning.md) — Semver policy and the envelope-`version` byte
 - [`docs/epoch-rotation.md`](docs/epoch-rotation.md) — Key-epoch rotation & retirement runbook
-- [`docs/development.md`](docs/development.md) — Dependency policy, vendored-crate refresh, local checks
+- [`docs/development.md`](docs/development.md) — Dependency policy, vendored-crate refresh, local checks, CI & publishing
 

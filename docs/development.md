@@ -3,7 +3,7 @@
 Operational notes for working on MOSSEAL itself (not for consumers — see the
 package READMEs for that). The normative specs live in [`specs/`](../specs/);
 this file captures the build/dependency conventions that are not part of the
-wire format or public API.
+wire format or public API, plus the CI and publishing pipeline.
 
 ## Dependency policy
 
@@ -65,3 +65,175 @@ cargo deny --all-features check && cargo machete   # needs cargo-deny / cargo-ma
 
 JS/TS packages and the browser suite are documented in the root
 [`README.md`](../README.md#development--testing).
+
+## CI & Publishing
+
+### Repository CI (`.github/workflows/ci.yml`)
+
+Runs on every push to `prod` and every pull request. Nine jobs:
+
+| Job | Runner | What it guards |
+|---|---|---|
+| `rust-native` | ubuntu + windows | `cargo fmt --check`, strict `clippy`, `cargo test --workspace` (incl. the deterministic `fuzz_smoke` suite), and the `vectors.json` drift tripwire. |
+| `fuzz-smoke` | ubuntu (nightly) | 60 s each on the `decode` / `open` `cargo fuzz` targets. |
+| `supply-chain` | ubuntu | `cargo deny` (advisories, license allow-list, banned crates, crates.io-only sources) + `cargo machete` (no unused direct deps). |
+| `coverage` | ubuntu | `cargo llvm-cov` summary uploaded as an artifact. **Report-only** — no floor yet. |
+| `wasm-test` | ubuntu (node + chrome) | `wasm-pack test` for the wasm-only surface; the Chromium leg exercises `web_sys::window` hostname detection. |
+| `wasm-node` | ubuntu | Builds the conformance wasm and runs the byte-exact vector suite + URL/QR budget + Argon2 timing. |
+| `wasm-browser` | ubuntu (chromium) | Playwright: cross-host portability, `DOMAIN_MISMATCH`, strict/lenient net-time matrix, custom `MOSSEAL_TIME_SOURCES`, no-fragment-leak assertion. |
+| `packages` | ubuntu | Builds both packages, runs the CLI unit tests, and packs the CLI (asserting the derived vendored crate lands in the tarball). |
+| `doctor-clean` | ubuntu (`node:22-bookworm`) | `mosseal doctor` + an end-to-end `init`/`build` from the **packed tarball** in a clean container. |
+
+Run the same checks locally before pushing:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo run -p mosseal-vectors -- --check
+cargo deny --all-features check && cargo machete   # needs cargo-deny / cargo-machete
+```
+
+### Releasing (`scripts/release.mjs`)
+
+The release checklist is scripted so the lockstep manifest bump, the regenerated
+`vectors.json`, and the refreshed vendored crate cannot be skipped.
+
+```bash
+# Verify every manifest agrees on one version (also run in CI):
+node scripts/release.mjs --check
+
+# Bump + regenerate (preview first with --dry-run):
+node scripts/release.mjs --version 0.2.0
+```
+
+`--version` updates the workspace `Cargo.toml`, both `package.json` files, and the
+template `Cargo.toml` (+ its vendored `mosseal-core-<ver>` path) in lockstep, then
+regenerates `vectors.json` and re-packages the vendored crate.
+
+The vendored `mosseal-core-<ver>.crate` is a **derived artifact and is not committed**;
+it is regenerated automatically by `npm pack`/`npm publish` (the `prepack` script) and
+on demand via `npm run sync:core`.
+
+**Release steps:**
+
+1. Add a `CHANGELOG.md` entry under the new version heading. *(manual)*
+2. Run `node scripts/release.mjs --version <X.Y.Z>`.
+3. If the envelope layout changed, bump the `version` byte in `mosseal-core` and update spec 01. *(manual)*
+4. Review the regenerated `vectors.json` + vendored crate diff.
+5. Commit and tag `v<X.Y.Z>`, then run the `release` workflow (below).
+
+See [`versioning.md`](versioning.md) for the full semver + envelope-version policy.
+
+### Publishing pipeline
+
+Both npm packages ship to **two registries**: GitHub Packages (the source of truth,
+private-by-default) and the public npm registry (npmjs). The flow is staged so a
+release is reviewed before it becomes the default install target.
+
+```mermaid
+flowchart TD
+    A["release.yml<br/>(workflow_dispatch, prod)"] -->|"build + pack, publish @next"| B["GitHub Packages<br/>@mosseal/core @next<br/>@mosseal/cli @next"]
+    A -->|"create DRAFT Release<br/>+ attach tarballs"| C["Draft GitHub Release<br/>vX.Y.Z"]
+    C -->|"maintainer publishes the draft"| D["release-published.yml<br/>(on: release published)"]
+    D -->|"npm dist-tag add … latest"| E["GitHub Packages<br/>@latest"]
+    E -->|"gate: Release published<br/>+ GP latest == version"| F["release-npmjs.yml<br/>(workflow_dispatch, prod)"]
+    F -->|"download Release tarballs"| G{"package exists<br/>on npmjs?"}
+    G -->|"yes"| H["npm publish<br/>OIDC trusted publishing"]
+    G -->|"no (first release)"| I["npm publish<br/>NPM_TOKEN bootstrap"]
+    H --> J["npmjs<br/>@latest"]
+    I --> J
+```
+
+#### `release.yml` — build, stage under `next`, draft the Release
+
+`workflow_dispatch` on `prod`. Reads the authoritative version from the root
+`Cargo.toml`, compares it to the latest `v*` git tag, and **skips automatically**
+when it is not newer. Otherwise it builds + packs both packages, publishes them to
+GitHub Packages under the **`next` dist-tag**, and creates a **draft** GitHub
+Release with the tarballs attached.
+
+Publishing under `next` keeps `npm install @mosseal/cli` resolving to the previous
+`latest` while the draft is under review:
+
+```bash
+npm install @mosseal/cli          # previous latest
+npm install @mosseal/cli@next     # the version under review
+```
+
+#### `release-published.yml` — promote `next` → `latest`
+
+Fires on `release: published`. Takes the version from the release tag (`v<version>`)
+and moves the `latest` dist-tag on GitHub Packages:
+
+```bash
+npm dist-tag add @mosseal/cli@<version> latest
+```
+
+#### `release-npmjs.yml` — mirror to the public npm registry
+
+`workflow_dispatch` on `prod`, with `mode: check | publish`. This is the **second
+registry** and is deliberately gated: it refuses to run unless the version is
+already live on GitHub Packages under `latest` (i.e. `release-published` has
+succeeded). It then re-publishes the **exact tarballs attached to the GitHub
+Release**, so both registries serve byte-identical artifacts.
+
+The gate has two checks, both required:
+
+1. `gh release view v<version>` reports `isDraft: false` — a published Release is
+   what fires `release-published`.
+2. `npm view @mosseal/core dist-tags.latest` on GitHub Packages equals the
+   authoritative version — the observable proof `release-published` succeeded.
+   (GitHub Packages requires auth even for reads, so this uses `GITHUB_TOKEN`.)
+
+**Auth — trusted publishing with a bootstrap fallback.** Normal publishes use npm
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC): the npm CLI
+detects the GitHub Actions OIDC environment and exchanges it for a short-lived
+publish token, so there is no long-lived secret to store or rotate, and provenance
+attestations are generated automatically. This requires `id-token: write` and npm
+CLI ≥ 11.5.1 / Node ≥ 22.14.
+
+A trusted publisher can only be configured on a package that **already exists** on
+npmjs, so the first-ever publish of each package has no OIDC trust to use. The
+publish step detects this (the package 404s on the registry) and falls back to
+`secrets.NPM_TOKEN` for that one publish, requesting `--provenance` explicitly
+(token auth does not get it automatically). The check is per-package, so it handles
+`@mosseal/core` and `@mosseal/cli` being at different stages.
+
+**One-time setup on npmjs.com, per package** (`@mosseal/core` *and* `@mosseal/cli`):
+Package → Settings → Trusted Publisher → GitHub Actions, with:
+
+| Field | Value |
+|---|---|
+| Organization or user | `mosseal` |
+| Repository | `mosseal` |
+| Workflow filename | `release-npmjs.yml` (exact, case-sensitive, includes `.yml`) |
+| Allowed actions | `npm publish` |
+
+The workflow filename must match exactly, and `repository.url` in each
+`package.json` must match the GitHub repo. npm does **not** validate on save —
+errors only surface at publish time.
+
+**First-release sequence:**
+
+1. Set the `NPM_TOKEN` repo secret (npm **Automation** token).
+2. Run `release-npmjs` with `mode=publish` → both packages bootstrap-publish via token.
+3. Configure the trusted publisher for **each** package on npmjs.com.
+4. Revoke `NPM_TOKEN` — subsequent releases use OIDC.
+
+> **Registry override gotcha:** the tarballs carry
+> `publishConfig.registry = https://npm.pkg.github.com`, which overrides
+> `setup-node`'s `registry-url` (a userconfig value). Only the explicit CLI
+> `--registry` flag wins, so the workflow passes
+> `--registry=https://registry.npmjs.org` on every `npm view` / `npm publish`.
+> Without it the publish would target GitHub Packages and OIDC auth would fail.
+
+### Deploying a consumer site
+
+Compile-time injection means the Rust toolchain runs in **your** CI. The canonical
+GitHub Actions snippet (Rust toolchain + `Swatinem/rust-cache` +
+`jetli/wasm-pack-action`, secrets via env vars, `mosseal doctor` for fast failure) lives
+in [`packages/mosseal/README.md`](../packages/mosseal/README.md#consumer-ci-github-actions).
+
+> **Windows runners:** always use `jetli/wasm-pack-action` (or `npx wasm-pack`), never
+> `curl … | sh`.
