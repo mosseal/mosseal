@@ -168,4 +168,4 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   unchanged (first success wins). `FetchTimes` gained `fetch_all_unix_secs` (defaulted,
   so existing fetchers are unaffected).
 
-[Unreleased]: https://github.com/codynhanpham/mosseal/commits/main
+[Unreleased]: https://github.com/mosseal/mosseal/commits/main
