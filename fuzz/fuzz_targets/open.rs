@@ -30,6 +30,9 @@ fuzz_target!(|data: &[u8]| {
         argon_profile: Argon2Profile::Minimum,
         time_mode: TimeMode::Lenient,
         runtime_hostname: None,
+        // Empty = `time::DEFAULT_TIME_SOURCES`; the injected `NoFetch` never
+        // reaches the network, so the expiry path stays deterministic.
+        time_sources: Vec::new(),
     };
     // Password present so the Argon2 path is reachable, but only for inputs
     // that look like a fragment (avoid spending the whole budget on Argon2).

@@ -154,7 +154,7 @@ jobs:
                   version: latest
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: npm
                   cache-dependency-path: packages/core/package-lock.json
             - name: install
@@ -185,7 +185,7 @@ jobs:
                   version: latest
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: npm
                   cache-dependency-path: packages/core/package-lock.json
             - name: install
@@ -222,7 +222,7 @@ jobs:
             - uses: Swatinem/rust-cache@v2
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: npm
                   cache-dependency-path: |
                       packages/core/package-lock.json
@@ -260,7 +260,13 @@ jobs:
         name: doctor (clean container)
         runs-on: ubuntu-latest
         container:
-            image: node:22-bookworm
+            image: node:24-bookworm
+        # The job container runs as root (euid home = /root) but GitHub sets
+        # HOME=/github/home. rustup refuses to install when $HOME != euid home,
+        # and wasm-pack's installer then can't find rustup. Pin HOME to the real
+        # root home so both installers agree.
+        env:
+            HOME: /root
         steps:
             - uses: actions/checkout@v4
             # Rust first: `npm pack` runs the `prepack` hook, which regenerates the
