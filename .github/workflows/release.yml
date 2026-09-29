@@ -7,15 +7,25 @@
 #
 #   mode=check   (default): report the authoritative version and whether it is
 #                           newer than the latest `v*` git tag. No side effects.
-#   mode=release:           build + pack both packages, publish them to GitHub
-#                           Packages under the `next` dist-tag, and create a DRAFT
-#                           GitHub Release with the tarballs attached. Automatically
-#                           SKIPPED when the authoritative version is not newer than
-#                           the latest `v*` git tag.
+#   mode=release:           build + pack both npm packages, publish them to GitHub
+#                           Packages under the `next` dist-tag, cross-compile the
+#                           native `mosseal` CLI for every supported platform, and
+#                           create a DRAFT GitHub Release with the npm tarballs,
+#                           one archive per target, and a SHA256SUMS file attached.
+#                           Automatically SKIPPED when the authoritative version is
+#                           not newer than the latest `v*` git tag.
 #
 # Publishing uses the `next` dist-tag so `npm install @mosseal/cli` keeps resolving
 # to the previous `latest` until the draft Release is published — see
 # `release-published.yml`, which promotes `next` → `latest`.
+#
+# Job graph:
+#   version ──┬─> npm ──────┐
+#             └─> binaries ─┴─> draft-release
+# `version` resolves the authoritative version + the should_release decision once;
+# `npm` publishes and uploads the tarballs; `binaries` cross-compiles + uploads one
+# archive per target; `draft-release` merges every artifact, writes SHA256SUMS, and
+# creates the draft Release. Publishing the draft promotes `next` → `latest`.
 
 name: release
 
@@ -29,29 +39,22 @@ on:
                 default: check
 
 jobs:
-    release:
-        name: release (${{ inputs.mode }})
+    # Resolve the authoritative version and decide whether this run should cut a
+    # release. Split into its own job so the npm publish job and the native
+    # binary matrix gate on the same decision (and so a `check` run does no work).
+    version:
+        name: resolve version
         # workflow_dispatch can be triggered from any branch; restrict to prod.
         if: github.ref == 'refs/heads/prod'
         runs-on: ubuntu-latest
-        # `contents: write` creates the draft Release; `packages: write` publishes
-        # to GitHub Packages.
-        permissions:
-            contents: write
-            packages: write
+        outputs:
+            version: ${{ steps.version.outputs.version }}
+            should_release: ${{ steps.version.outputs.should_release }}
         steps:
             # Full history so `git tag` sees every release tag.
             - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
-            # The wasm32 target + wasm-pack are needed by `npm pack`'s `prepack`
-            # step, which rebuilds the vendored admin wasm
-            # (scripts/sync-admin-wasm.mjs) and the vendored mosseal-core crate.
-            - uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: wasm32-unknown-unknown
-            - uses: jetli/wasm-pack-action@v0.4.0
-            - uses: Swatinem/rust-cache@v2
             - uses: actions/setup-node@v7
               with:
                   node-version: 24
@@ -62,7 +65,7 @@ jobs:
               run: node scripts/release.mjs --check
 
             # Resolve the authoritative version and compare it to the latest
-            # `v*` git tag. `should_release` gates the build/pack/draft steps.
+            # `v*` git tag. `should_release` gates the build/pack/draft jobs.
             - name: resolve version
               id: version
               run: |
@@ -84,24 +87,48 @@ jobs:
                     echo "::notice::skipping — $VERSION is not newer than latest tag v$LAST"
                   fi
 
-            # mode=release: build + pack both packages, publish them to GitHub
-            # Packages under the `next` dist-tag, then create a DRAFT GitHub
-            # Release with the tarballs attached. Publish runs BEFORE the draft
-            # Release (which creates the tag) so a failed publish leaves no tag
-            # and can be retried.
+    # npm packages: build + pack both, publish them to GitHub Packages under the
+    # `next` dist-tag, and upload the tarballs so the draft Release can attach
+    # them. Publish runs BEFORE the draft Release (which creates the tag) so a
+    # failed publish leaves no tag and can be retried.
+    npm:
+        name: npm packages
+        needs: version
+        if: inputs.mode == 'release' && needs.version.outputs.should_release == 'true'
+        runs-on: ubuntu-latest
+        # `packages: write` publishes to GitHub Packages.
+        permissions:
+            contents: read
+            packages: write
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+            # The wasm32 target + wasm-pack are needed by `npm pack`'s `prepack`
+            # step, which rebuilds the vendored admin wasm
+            # (scripts/sync-admin-wasm.mjs) and the vendored mosseal-core crate.
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
+            - uses: jetli/wasm-pack-action@v0.4.0
+            - uses: Swatinem/rust-cache@v2
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  # Never cache in release builds.
+                  package-manager-cache: false
+
             - name: build + pack both packages
-              if: inputs.mode == 'release' && steps.version.outputs.should_release == 'true'
               run: |
                   (cd packages/core && npm ci && npm run build && npm pack --pack-destination /tmp)
                   (cd packages/mosseal && npm ci && npm run build && npm pack --pack-destination /tmp)
 
             - name: publish to GitHub Packages (next)
-              if: inputs.mode == 'release' && steps.version.outputs.should_release == 'true'
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   set -euo pipefail
-                  VERSION="${{ steps.version.outputs.version }}"
+                  VERSION="${{ needs.version.outputs.version }}"
                   # Auth via a temp npmrc so the repo's npm config is untouched.
                   NPMRC="$(mktemp)"
                   printf '//npm.pkg.github.com/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$NPMRC"
@@ -124,13 +151,132 @@ jobs:
                   publish @mosseal/cli  "/tmp/mosseal-cli-$VERSION.tgz"
                   rm -f "$NPMRC"
 
+            - name: upload npm tarballs
+              uses: actions/upload-artifact@v7
+              with:
+                  name: npm-tarballs
+                  path: /tmp/*.tgz
+                  if-no-files-found: error
+                  retention-days: 7
+
+    # Native CLI binaries: cross-compile the `mosseal` binary for every supported
+    # platform and package one archive per target. `houseabsolute/actions-rust-cross`
+    # uses `cross` (Docker) for the Linux targets and the native toolchain on the
+    # macOS/Windows runners. Only `-p mosseal-cli` is built — the wasm crates are
+    # wasm32-only and must not be pulled into a native build.
+    binaries:
+        name: binaries (${{ matrix.target }})
+        needs: version
+        if: inputs.mode == 'release' && needs.version.outputs.should_release == 'true'
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - target: x86_64-unknown-linux-gnu
+                      runner: ubuntu-latest
+                      archive: tar.gz
+                    - target: x86_64-unknown-linux-musl
+                      runner: ubuntu-latest
+                      archive: tar.gz
+                    - target: aarch64-unknown-linux-gnu
+                      runner: ubuntu-latest
+                      archive: tar.gz
+                    - target: aarch64-unknown-linux-musl
+                      runner: ubuntu-latest
+                      archive: tar.gz
+                    - target: x86_64-apple-darwin
+                      runner: macos-latest
+                      archive: tar.gz
+                    - target: aarch64-apple-darwin
+                      runner: macos-latest
+                      archive: tar.gz
+                    - target: x86_64-pc-windows-msvc
+                      runner: windows-latest
+                      archive: zip
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: build
+              uses: houseabsolute/actions-rust-cross@v1
+              with:
+                  command: build
+                  target: ${{ matrix.target }}
+                  # `--locked` keeps the release build on the committed lockfile;
+                  # `--target-dir target/cross` keeps the path predictable below.
+                  # `strip: false` — the release profile already sets `strip = true`.
+                  args: --locked --release -p mosseal-cli --target-dir target/cross
+                  strip: false
+
+            - name: package (tar.gz)
+              if: matrix.archive == 'tar.gz'
+              shell: bash
+              env:
+                  TARGET: ${{ matrix.target }}
+                  VERSION: ${{ needs.version.outputs.version }}
+              run: |
+                  set -euo pipefail
+                  archive="mosseal-v${VERSION}-${TARGET}.tar.gz"
+                  binary="target/cross/${TARGET}/release/mosseal"
+                  test -f "$binary"
+                  tar -czf "$archive" -C "$(dirname "$binary")" mosseal
+
+            - name: package (zip)
+              if: matrix.archive == 'zip'
+              shell: pwsh
+              env:
+                  TARGET: ${{ matrix.target }}
+                  VERSION: ${{ needs.version.outputs.version }}
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  $archive = "mosseal-v$env:VERSION-$env:TARGET.zip"
+                  $binary = "target/cross/$env:TARGET/release/mosseal.exe"
+                  if (-not (Test-Path $binary)) { throw "Binary not found: $binary" }
+                  Compress-Archive -Path $binary -DestinationPath $archive
+
+            - name: upload archive
+              uses: actions/upload-artifact@v7
+              with:
+                  name: mosseal-${{ matrix.target }}
+                  path: mosseal-v${{ needs.version.outputs.version }}-${{ matrix.target }}.${{ matrix.archive }}
+                  if-no-files-found: error
+                  retention-days: 7
+
+    # Draft Release: merge the npm tarballs + every native archive, write a
+    # SHA256SUMS file, and create the draft. Publishing the draft fires
+    # release-published.yml, which promotes `next` → `latest`.
+    draft-release:
+        name: draft release
+        needs: [version, npm, binaries]
+        if: inputs.mode == 'release' && needs.version.outputs.should_release == 'true'
+        runs-on: ubuntu-latest
+        # `contents: write` creates the draft Release.
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: download all artifacts
+              uses: actions/download-artifact@v7
+              with:
+                  path: dist
+                  merge-multiple: true
+
+            - name: generate checksums
+              working-directory: dist
+              run: |
+                  set -euo pipefail
+                  # `extglob` so a pre-existing SHA256SUMS (re-run) is excluded
+                  # from its own manifest.
+                  shopt -s extglob
+                  sha256sum !(SHA256SUMS) > SHA256SUMS
+                  cat SHA256SUMS
+
             - name: create draft GitHub Release
-              if: inputs.mode == 'release' && steps.version.outputs.should_release == 'true'
               env:
                   GH_TOKEN: ${{ github.token }}
               run: |
-                  gh release create "v${{ steps.version.outputs.version }}" \
+                  gh release create "v${{ needs.version.outputs.version }}" dist/* \
                     --draft \
-                    --title "v${{ steps.version.outputs.version }}" \
-                    --notes "Published to GitHub Packages under the \`next\` dist-tag as \`@mosseal/core@${{ steps.version.outputs.version }}\` and \`@mosseal/cli@${{ steps.version.outputs.version }}\`. Review the attached tarballs, then publish this draft — that promotes \`next\` to \`latest\`." \
-                    /tmp/*.tgz
+                    --title "v${{ needs.version.outputs.version }}" \
+                    --notes "Published to GitHub Packages under the \`next\` dist-tag as \`@mosseal/core@${{ needs.version.outputs.version }}\` and \`@mosseal/cli@${{ needs.version.outputs.version }}\`. Native \`mosseal\` CLI binaries are attached for every supported platform (see \`SHA256SUMS\`). Review the attached artifacts, then publish this draft — that promotes \`next\` to \`latest\`."

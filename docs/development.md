@@ -134,7 +134,8 @@ release is reviewed before it becomes the default install target.
 ```mermaid
 flowchart TD
     A["release.yml<br/>(workflow_dispatch, prod)"] -->|"build + pack, publish @next"| B["GitHub Packages<br/>@mosseal/core @next<br/>@mosseal/cli @next"]
-    A -->|"create DRAFT Release<br/>+ attach tarballs"| C["Draft GitHub Release<br/>vX.Y.Z"]
+    A -->|"cross-compile mosseal CLI<br/>per target"| BIN["Native binaries<br/>linux/mac/windows"]
+    A -->|"create DRAFT Release<br/>+ attach tarballs, archives, SHA256SUMS"| C["Draft GitHub Release<br/>vX.Y.Z"]
     C -->|"maintainer publishes the draft"| D["release-published.yml<br/>(on: release published)"]
     D -->|"npm dist-tag add … latest"| E["GitHub Packages<br/>@latest"]
     E -->|"gate: Release published<br/>+ GP latest == version"| F["release-npmjs.yml<br/>(workflow_dispatch, prod)"]
@@ -149,9 +150,17 @@ flowchart TD
 
 `workflow_dispatch` on `prod`. Reads the authoritative version from the root
 `Cargo.toml`, compares it to the latest `v*` git tag, and **skips automatically**
-when it is not newer. Otherwise it builds + packs both packages, publishes them to
-GitHub Packages under the **`next` dist-tag**, and creates a **draft** GitHub
-Release with the tarballs attached.
+when it is not newer. Otherwise it:
+
+1. builds + packs both npm packages and publishes them to GitHub Packages under
+the **`next` dist-tag**;
+2. cross-compiles the native `mosseal` CLI for every supported platform and
+packages one archive per target;
+3. creates a **draft** GitHub Release with the npm tarballs, the native archives,
+and a `SHA256SUMS` file attached.
+
+The job graph is `version` → (`npm`, `binaries`) → `draft-release`, so the version
+decision is made once and both build jobs gate on it.
 
 Publishing under `next` keeps `npm install @mosseal/cli` resolving to the previous
 `latest` while the draft is under review:
@@ -160,6 +169,30 @@ Publishing under `next` keeps `npm install @mosseal/cli` resolving to the previo
 npm install @mosseal/cli          # previous latest
 npm install @mosseal/cli@next     # the version under review
 ```
+
+##### Native CLI binaries
+
+The `binaries` job uses
+[`houseabsolute/actions-rust-cross`](https://github.com/houseabsolute/actions-rust-cross)
+(`cross`/Docker for the Linux targets, the native toolchain on the macOS/Windows
+runners) and builds only `-p mosseal-cli` — the wasm crates are wasm32-only and
+must not be pulled into a native build. Each target produces
+`mosseal-v<version>-<target>.tar.gz` (`.zip` on Windows), and `draft-release`
+writes a `SHA256SUMS` covering every attached file.
+
+| Target | Runner | Archive |
+|---|---|---|
+| `x86_64-unknown-linux-gnu` | ubuntu | tar.gz |
+| `x86_64-unknown-linux-musl` | ubuntu | tar.gz |
+| `aarch64-unknown-linux-gnu` | ubuntu | tar.gz |
+| `aarch64-unknown-linux-musl` | ubuntu | tar.gz |
+| `x86_64-apple-darwin` | macos | tar.gz |
+| `aarch64-apple-darwin` | macos | tar.gz |
+| `x86_64-pc-windows-msvc` | windows | zip |
+
+To add a target, add a matrix entry (and, if it needs a non-default runner, its
+`runner`). The release profile already sets `strip = true`, so the action is run
+with `strip: false`.
 
 #### `release-published.yml` — promote `next` → `latest`
 

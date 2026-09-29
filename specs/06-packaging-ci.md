@@ -141,8 +141,13 @@ compile < 1 min after warm cargo cache.
   invocations (`jetli/wasm-pack-action`, `npx`), never `curl | sh` on Windows runners.
 
 `.github/workflows/release.yml` (`workflow_dispatch`): runs the release consistency check
-(`node scripts/release.mjs --check`) and, in `bump` mode, the bump/regenerate script so a
-release cannot silently skip the manifest/vendored-crate/vectors steps.
+(`node scripts/release.mjs --check`), and in `release` mode builds + packs both npm
+packages (publishing them under the `next` dist-tag), cross-compiles the native `mosseal`
+CLI for every supported platform (one archive per target, via
+`houseabsolute/actions-rust-cross`), and creates a draft GitHub Release with the npm
+tarballs, the native archives, and a `SHA256SUMS` file attached. The job graph is
+`version` → (`npm`, `binaries`) → `draft-release`, so the version decision is made once
+and both build jobs gate on it.
 
 ## Static hosting notes
 

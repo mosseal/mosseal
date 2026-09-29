@@ -8,6 +8,15 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 
 ## [Unreleased]
 
+### Added
+
+- **Native CLI binaries in releases** (spec 06) — the `release` workflow now
+  cross-compiles the `mosseal` CLI for every supported platform and attaches one
+  archive per target (`mosseal-v<version>-<target>.tar.gz`, `.zip` on Windows) plus a
+  `SHA256SUMS` file to the draft GitHub Release. Targets: linux `x86_64`/`aarch64`
+  (gnu + musl), macOS `x86_64`/`aarch64`, and Windows `x86_64-msvc`. The workflow is
+  restructured into `version` → (`npm`, `binaries`) → `draft-release` jobs.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

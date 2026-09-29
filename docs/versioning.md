@@ -97,8 +97,9 @@ node scripts/release.mjs --sync
    it is regenerated at `npm pack` time (`prepack`) and by `--sync`. *(scripted)*
 6. Tag the release and publish both packages to **GitHub Packages**
    (`npm.pkg.github.com`, configured via `publishConfig`). *(scripted — the `release`
-   workflow publishes both packages under the `next` dist-tag, then creates the draft
-   Release)*
+   workflow publishes both packages under the `next` dist-tag, cross-compiles the
+   native `mosseal` CLI for every supported platform, then creates the draft Release
+   with the npm tarballs, the native archives, and a `SHA256SUMS` file attached)*
 7. Publish the draft Release — this promotes `next` → `latest` on GitHub Packages
    (`release-published.yml`). *(manual — review the draft first)*
 8. Mirror the release to the **public npm registry** by running the `release-npmjs`
@@ -110,8 +111,10 @@ node scripts/release.mjs --sync
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)
 reads the authoritative version, compares it to the latest `v*` git tag, and **skips
 automatically** when it is not newer. Otherwise it builds + packs both packages,
-publishes them to GitHub Packages under the **`next` dist-tag**, and creates a **draft**
-GitHub Release with the tarballs attached.
+publishes them to GitHub Packages under the **`next` dist-tag**, cross-compiles the
+native `mosseal` CLI for every supported platform (one archive per target), and
+creates a **draft** GitHub Release with the npm tarballs, the native archives, and a
+`SHA256SUMS` file attached.
 
 ### Dist-tag staging (`next` → `latest`)
 
