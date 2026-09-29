@@ -46,6 +46,7 @@ mosseal/
 ├── crates/
 │   ├── mosseal-core/    # Platform-agnostic crypto engine (AES-256-GCM, HKDF, Argon2id, envelope format)
 │   ├── mosseal-wasm/    # wasm-bindgen bindings, obfuse! secrets.rs slot, JS time bridge
+│   ├── mosseal-admin-wasm/ # Admin wasm surface for the TS CLI (gen-secret/seal/open parity)
 │   └── mosseal-cli/     # Native admin CLI for trusted token sealing, opening, secret generation
 ├── packages/
 │   ├── mosseal/         # Node.js CLI builder (`mosseal init`, `build`, `rotate`, `doctor`)
@@ -322,6 +323,44 @@ Rotation notes (spec 02 § Key epochs):
 
 See [`docs/epoch-rotation.md`](docs/epoch-rotation.md) for the full runbook.
 
+#### 5. Admin commands (seal / open / gen-secret)
+
+The trusted admin surface of the native `mosseal-cli` binary is also available
+through the TS CLI, so you can seal and open links without a Rust toolchain.
+Sealing/opening runs a precompiled admin wasm shipped in `@mosseal/cli`;
+`gen-secret` uses `node:crypto`.
+
+```bash
+SECRET=$(npx mosseal gen-secret)                 # fresh 32-byte base64url secret
+FRAG=$(npx mosseal seal "ghp_..." \
+  --epochs "$SECRET" --domains user.github.io)   # → "AQG...<fragment>"
+npx mosseal open "$FRAG" \
+  --epochs "$SECRET" --domains user.github.io
+# → kind: 1
+#   exp:  0
+#   data: ghp_...
+```
+
+Password + expiry, and admin debugging of an expired link:
+
+```bash
+npx mosseal seal "ghp_..." --password hunter2 --exp 1759000000 \
+  --epochs "$SECRET" --domains user.github.io
+
+# --ignore-expiry skips ONLY the expiry check; domain, epoch, password, and
+# the AEAD tag are still verified.
+npx mosseal open "$FRAG" --epochs "$SECRET" --domains user.github.io --ignore-expiry
+```
+
+Epochs and domains fall back to `MOSSEAL_EPOCHS` / `MOSSEAL_ALLOWED_DOMAINS`,
+then to the `.env` slots — the same config `init`/`rotate`/`build` use.
+
+The admin commands are behaviourally interchangeable with the native
+`mosseal-cli` binary: identical envelope bytes, identical stdout
+(`kind`/`exp`/`data`), and identical errors — both emit
+`Error: <CODE>: <detail>` (e.g. `Error: BAD_PASSWORD: gcm tag mismatch`) and
+`exit 1`. A fragment sealed by either surface opens in the other.
+
 ### Rust
 
 The Rust surface has two parts: the **native admin CLI** (`mosseal-cli`, binary
@@ -479,7 +518,7 @@ The full taxonomy is `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`,
 
 | Package | Purpose | Docs |
 |---|---|---|
-| `@mosseal/cli` (npm, devDep) | CLI builder: validates env, injects secrets, compiles the per-consumer wasm | [`packages/mosseal/README.md`](packages/mosseal/README.md) |
+| `@mosseal/cli` (npm, devDep) | CLI builder: validates env, injects secrets, compiles the per-consumer wasm; also exposes the admin surface (`gen-secret`/`seal`/`open`) | [`packages/mosseal/README.md`](packages/mosseal/README.md) |
 | `@mosseal/core` (npm) | Runtime TS wrapper: loads wasm, URL fragments, error taxonomy | [`packages/core/README.md`](packages/core/README.md) |
 | `mosseal-core` (crate) | Platform-agnostic crypto engine | `specs/02-crypto-core.md` |
 | `mosseal-wasm` (crate) | wasm-bindgen bindings | `specs/02-crypto-core.md` |

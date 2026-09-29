@@ -15,6 +15,41 @@ mosseal rotate       # append new epoch secret, keep old ones for grace
 mosseal doctor       # check rust/wasm-pack presence, versions, warnings
 ```
 
+### Admin commands (trusted path)
+
+The native `mosseal-cli` binary's trusted admin surface is also exposed through this CLI so
+links can be sealed/opened without a Rust toolchain:
+
+```
+mosseal gen-secret      # print a fresh 32-byte base64url epoch secret
+mosseal seal <token>    # seal a token into a share-link fragment
+mosseal open <fragment> # open and verify a fragment
+```
+
+Flags: `--epochs <s;e;c>` / `--domains <a,b>` (fall back to `MOSSEAL_EPOCHS` /
+`MOSSEAL_ALLOWED_DOMAINS`, then to the `.env` slots), `--password <pw>` (bare `--password`
+prompts on a TTY with echo off), `--exp <unix-secs>` and `--kind <token|binary_blob>`
+(seal), `--ignore-expiry` (open).
+
+These mirror `mosseal-cli`'s trusted-path semantics exactly: `runtime_hostname: None`
+(spec 03 — the CLI skips the runtime host gate) and `TimeMode::Lenient` with a no-network
+fetcher (spec 07 — the admin path never blocks on internet time). Sealing/opening runs a
+precompiled admin wasm (`crates/mosseal-admin-wasm`, shipped in `vendor/admin-wasm/`);
+`gen-secret` uses `node:crypto` and is byte-identical to the native implementation.
+
+The two admin surfaces are deliberately interchangeable:
+
+- **Envelope bytes** are identical (same core, same sealing epoch = latest active).
+- **stdout** is identical for `open` (`kind: N` / `exp:  N` / `data: ...`) and `seal`
+  (the bare fragment); `gen-secret` prints a 43-char base64url secret.
+- **Errors** are identical: `Error: <CODE>: <detail>` on stderr, exit `1`
+  (e.g. `Error: BAD_PASSWORD: gcm tag mismatch`). This replaced the native CLI's
+  old `Error: <lowercase prose>` — the stable code is now always the prefix.
+- **Flags** match: `--epochs`, `--domains`, `--password`, `--exp`, `--kind
+  <token|binary-blob>`, `--ignore-expiry`. `--password` takes an optional value
+  (bare `--password` prompts with echo off). Errors
+print the stable machine-readable code (e.g. `BAD_PASSWORD`, `EXPIRED`) and exit non-zero.
+
 ## Environment variables (consumer `.env`)
 
 | Var | Required | Notes |
@@ -91,8 +126,13 @@ the `.env` parser is internal (`src/dotenv.ts`), so `dotenv` is NOT a dependency
 "zero runtime deps beyond `dotenv`" note was inaccurate; nothing imported the npm package).
 
 Sources are TypeScript under `src/` (`cli.ts`, `env.ts`, `build.ts`, `init.ts`, `dotenv.ts`,
-`toolchain.ts`, `codegen.ts`, `bin/mosseal.ts`). The package builds with **Vite 8** (Rolldown,
+`toolchain.ts`, `codegen.ts`, `admin.ts`, `admin-wasm.ts`, `bin/mosseal.ts`). The package builds with **Vite 8** (Rolldown,
 SSR target) into a single `dist/mosseal.js` with the `#!/usr/bin/env node` shebang preserved
 and `node:*` builtins external. The `bin` field points at `./dist/mosseal.js`; `PKG_ROOT`
-resolves from `dist/` to the package root holding `template/`. All file writes go through a
+resolves from `dist/` to the package root holding `template/` and `vendor/`. All file writes go through a
 `--dry-run`-able planner for testability.
+
+The admin wasm (`vendor/admin-wasm/`) is a derived build artifact (not committed), built by
+`scripts/sync-admin-wasm.mjs` at `npm pack`/publish time and in CI. It is loaded through
+`createRequire` (the wasm-bindgen `--target nodejs` glue is CommonJS, renamed to `.cjs` so it
+loads under the ESM package).

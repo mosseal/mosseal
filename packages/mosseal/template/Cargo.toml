@@ -1,6 +1,6 @@
 [package]
 name = "mosseal-wasm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 # NOTE: this is the TEMPLATE shipped inside the `mosseal` npm package (spec 05).
@@ -22,7 +22,7 @@ conformance = []
 # mosseal-core is vendored as a .crate file next to this manifest; the CLI
 # builder patches this path in before building (keeps the template
 # self-contained without publishing mosseal-core to crates.io).
-mosseal-core = { path = "./mosseal-core-0.1.0" }
+mosseal-core = { path = "./mosseal-core-0.2.0" }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
 serde = { version = "1", features = ["derive"] }

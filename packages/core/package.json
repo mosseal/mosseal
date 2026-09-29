@@ -1,6 +1,6 @@
 {
   "name": "@mosseal/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript wrapper for MOSSEAL consumer-compiled wasm (spec 04). Loads wasm, handles URL fragments, mirrors the wasm error taxonomy.",
   "type": "module",
   "main": "./dist/index.js",

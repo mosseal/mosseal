@@ -112,7 +112,8 @@ fn password_protected_link_needs_the_password() {
         .success()
         .stdout(predicate::str::contains("tok_pw"));
 
-    // Wrong password fails (non-zero exit) and does not leak the token.
+    // Wrong password fails (non-zero exit), prints the stable code, and does
+    // not leak the token.
     mosseal()
         .args([
             "open",
@@ -126,6 +127,7 @@ fn password_protected_link_needs_the_password() {
         ])
         .assert()
         .failure()
+        .stderr(predicate::str::contains("BAD_PASSWORD"))
         .stderr(predicate::str::contains("tok_pw").not());
 }
 
@@ -188,7 +190,46 @@ fn invalid_domain_is_rejected() {
     mosseal()
         .args(["seal", "tok", "--epochs", &s, "--domains", "https://a.com"])
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicate::str::contains("DOMAIN_MISMATCH"));
+}
+
+#[test]
+fn seal_kind_binary_blob_roundtrips() {
+    let s = secret(6);
+    let sealed = mosseal()
+        .args([
+            "seal",
+            "blob",
+            "--kind",
+            "binary-blob",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success();
+    let frag = String::from_utf8(sealed.get_output().stdout.clone())
+        .unwrap()
+        .trim()
+        .to_string();
+
+    mosseal()
+        .args(["open", &frag, "--epochs", &s, "--domains", "a.test"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("kind: 2"));
+}
+
+#[test]
+fn errors_use_the_stable_code_prefix() {
+    // Parity contract with the TS CLI: `Error: <CODE>: <detail>`.
+    mosseal()
+        .args(["seal", "tok", "--epochs", "AAAA", "--domains", "a.test"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Error: EPOCH_RETIRED:"));
 }
 
 #[test]

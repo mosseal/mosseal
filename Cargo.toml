@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/mosseal-core",
     "crates/mosseal-wasm",
+    "crates/mosseal-admin-wasm",
     "crates/mosseal-cli",
     "crates/mosseal-vectors",
 ]
@@ -12,7 +13,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mosseal/mosseal"

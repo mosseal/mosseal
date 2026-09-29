@@ -26,6 +26,9 @@
  *      `packages/mosseal/template/mosseal-core-<ver>.crate` (via
  *      `scripts/sync-core-crate.mjs`; the crate is a derived artifact and is
  *      NOT committed — it is also regenerated at `npm pack` time).
+ *   4. Rebuild the vendored admin wasm
+ *      (`packages/mosseal/vendor/admin-wasm/`, via
+ *      `scripts/sync-admin-wasm.mjs`; also a derived artifact, NOT committed).
  *
  * What it deliberately does NOT do (manual judgement required):
  *   - Write the CHANGELOG entry (release notes are prose).
@@ -154,7 +157,7 @@ function run(cmd, args) {
 
 function regenerateArtifacts(dryRun) {
   if (dryRun) {
-    console.log("dry-run: would regenerate vectors.json + the vendored crate");
+    console.log("dry-run: would regenerate vectors.json + the vendored crate + admin wasm");
     return;
   }
   // 1. vectors.json — the drift tripwire fails CI if this is stale.
@@ -165,6 +168,11 @@ function regenerateArtifacts(dryRun) {
   //    Delegated to sync-core-crate.mjs so there is a single implementation.
   console.log("re-packaging mosseal-core …");
   run("node", [join(HERE, "sync-core-crate.mjs")]);
+
+  // 3. vendored admin wasm (a derived artifact; not committed).
+  //    Delegated to sync-admin-wasm.mjs so there is a single implementation.
+  console.log("rebuilding vendored admin wasm …");
+  run("node", [join(HERE, "sync-admin-wasm.mjs")]);
 }
 
 function main() {

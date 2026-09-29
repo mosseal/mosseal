@@ -156,6 +156,11 @@ jobs:
               run: chromedriver --version
             - name: wasm-bindgen tests (${{ matrix.leg }})
               run: wasm-pack test ${{ matrix.args }} crates/mosseal-wasm
+            # The admin surface (spec 05) is Node-only (the TS CLI runs it in
+            # Node), so it is tested on the node leg only.
+            - if: matrix.leg == 'node'
+              name: admin wasm-bindgen tests
+              run: wasm-pack test --node crates/mosseal-admin-wasm
 
     # Node/wasm: build the conformance wasm (fixed test secrets) and run the
     # cross-target suite against the real wasm (spec 08): byte-exact conformance
@@ -228,18 +233,24 @@ jobs:
                   path: packages/core/playwright-report/
                   retention-days: 7
     # Package contents: verify `npm pack` ships exactly what spec 06 promises
-    # (core: dist/ only; CLI: dist/ + template/, no src/ leak). The CLI pack
-    # also exercises the derived vendored crate: `prepack` regenerates
-    # `template/mosseal-core-<ver>.crate` from crates/mosseal-core (it is NOT
-    # committed), so this job needs the Rust toolchain and asserts the crate
-    # actually lands in the tarball.
+    # (core: dist/ only; CLI: dist/ + template/ + vendor/, no src/ leak). The CLI
+    # pack also exercises the derived artifacts: `prepack` regenerates
+    # `template/mosseal-core-<ver>.crate` from crates/mosseal-core AND the
+    # vendored admin wasm from crates/mosseal-admin-wasm (neither is committed),
+    # so this job needs the Rust toolchain + wasm-pack and asserts both land in
+    # the tarball.
     packages:
         name: packages
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2
+            - uses: jetli/wasm-pack-action@v0.4.0
+              with:
+                  version: latest
             - uses: actions/setup-node@v7
               with:
                   node-version: 24
@@ -263,13 +274,15 @@ jobs:
             - name: pack @mosseal/core
               working-directory: packages/core
               run: npm pack --dry-run
-            - name: pack mosseal CLI (prepack regenerates the vendored crate)
+            - name: pack mosseal CLI (prepack regenerates the vendored crate + admin wasm)
               working-directory: packages/mosseal
               run: npm pack --pack-destination /tmp
-            - name: assert the tarball ships the vendored crate
+            - name: assert the tarball ships the vendored crate + admin wasm
               run: |
                   tar -tzf /tmp/mosseal-cli-*.tgz | grep -q 'package/template/mosseal-core-.*\.crate'
                   echo "✔ vendored mosseal-core crate present in the tarball"
+                  tar -tzf /tmp/mosseal-cli-*.tgz | grep -q 'package/vendor/admin-wasm/mosseal_admin_wasm_bg\.wasm'
+                  echo "✔ vendored admin wasm present in the tarball"
 
     # `mosseal doctor` in a CLEAN container (spec 06): proves the toolchain check
     # is honest about a fresh consumer environment and that a fresh consumer CI

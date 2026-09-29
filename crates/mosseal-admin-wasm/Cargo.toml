@@ -1,0 +1,52 @@
+[package]
+name = "mosseal-admin-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Admin wasm surface for the MOSSEAL TS CLI (gen-secret/seal/open parity with mosseal-cli)."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mosseal-core = { path = "../mosseal-core" }
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+console_error_panic_hook.workspace = true
+
+# wasm32 randomness feature activation.
+#
+# This direct dependency exists ONLY to turn on the required backend feature
+# for the *shared transitive* getrandom instance via Cargo feature unification
+# — no code in this crate references it:
+#   * mosseal-core uses rand 0.10 → getrandom 0.4, which needs `wasm_js`.
+# The backend resolves to `globalThis.crypto.getRandomValues`, available in
+# Node ≥ 20 and browsers, so no extra JS glue is required.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.4", features = ["wasm_js"] }
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
+base64.workspace = true
+
+# cargo-machete false positive: getrandom is required for feature unification
+# only (see the target-specific block above); no code references it.
+[package.metadata.cargo-machete]
+ignored = ["getrandom"]
+
+# wasm-pack runs `wasm-opt` (bundled binaryen) after the Rust build. wasm-pack
+# 0.15.0 still bundles binaryen 117, which predates the wasm features rustc
+# emits by default, so wasm-opt rejects the module unless those features are
+# explicitly enabled. Mirrors the template's settings (packages/mosseal/template).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-O",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-sign-ext",
+    "--enable-reference-types",
+]

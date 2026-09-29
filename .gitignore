@@ -53,6 +53,10 @@ pnpm-debug.log*
 # snapshot of crates/mosseal-core). It is regenerated at `npm pack` time
 # (`prepack` → scripts/sync-core-crate.mjs) and is deliberately NOT committed.
 packages/mosseal/template/mosseal-core-*.crate
+# The vendored admin wasm (crates/mosseal-admin-wasm) is likewise a DERIVED
+# build artifact, regenerated at `npm pack` time (`prepack` →
+# scripts/sync-admin-wasm.mjs) and in CI. Deliberately NOT committed.
+packages/mosseal/vendor/
 mosseal-out/
 
 # IDE

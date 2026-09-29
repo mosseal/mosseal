@@ -13,6 +13,10 @@
 import { run } from "../cli.js";
 
 run(process.argv.slice(2)).catch((err: unknown) => {
-  console.error((err as { message?: string })?.message ?? String(err));
+  // `Error: ` prefix mirrors the native `mosseal-cli` (anyhow's `Termination`
+  // impl prints `Error: <message>` to stderr), so the two admin surfaces are
+  // byte-identical on failure.
+  const message = (err as { message?: string })?.message ?? String(err);
+  console.error(`Error: ${message}`);
   process.exit(1);
 });

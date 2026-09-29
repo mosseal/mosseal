@@ -1,6 +1,6 @@
 {
   "name": "@mosseal/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI builder for MOSSEAL: validates env, injects secrets via Rust codegen, and compiles the per-consumer wasm (spec 05).",
   "type": "module",
   "bin": {
@@ -8,19 +8,21 @@
   },
   "files": [
     "dist/",
-    "template/"
+    "template/",
+    "vendor/"
   ],
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
     "build": "vite build",
-    "prepare": "npm run build && node ../../scripts/sync-core-crate.mjs",
+    "prepare": "npm run build && node ../../scripts/sync-core-crate.mjs && node ../../scripts/sync-admin-wasm.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint src test",
     "test": "vitest run",
     "sync:core": "node ../../scripts/sync-core-crate.mjs",
-    "prepack": "node ../../scripts/sync-core-crate.mjs"
+    "sync:admin-wasm": "node ../../scripts/sync-admin-wasm.mjs",
+    "prepack": "node ../../scripts/sync-core-crate.mjs && node ../../scripts/sync-admin-wasm.mjs"
   },
   "devDependencies": {
     "@types/node": "^26",

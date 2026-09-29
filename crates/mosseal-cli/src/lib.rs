@@ -11,7 +11,7 @@
 //! - `gen-secret` — emit a fresh 32-byte base64url epoch secret
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use mosseal_core::{
     binding,
     epoch::EpochRegistry,
@@ -20,6 +20,22 @@ use mosseal_core::{
     time::TimeMode,
 };
 use rand::TryRng;
+
+/// Payload kind (spec 01). Mirrors the TS CLI's `--kind token|binary_blob`.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum Kind {
+    Token,
+    BinaryBlob,
+}
+
+impl Kind {
+    fn byte(self) -> u8 {
+        match self {
+            Kind::Token => mosseal_core::envelope::kind::TOKEN,
+            Kind::BinaryBlob => mosseal_core::envelope::kind::BINARY_BLOB,
+        }
+    }
+}
 
 /// MOSSEAL CLI: generate and verify envelopes from a trusted machine.
 /// The Node/browser path is untrusted; the CLI is the admin path (spec 03).
@@ -41,6 +57,9 @@ pub enum Command {
         /// Expiry in unix seconds; omit for no expiry
         #[arg(long)]
         exp: Option<u64>,
+        /// Payload kind (default: token)
+        #[arg(long, value_enum, default_value_t = Kind::Token)]
+        kind: Kind,
         /// Epoch secrets as base64url, `;`-joined (or set MOSSEAL_EPOCHS)
         #[arg(long, env = "MOSSEAL_EPOCHS")]
         epochs: String,
@@ -82,9 +101,9 @@ impl mosseal_core::time::FetchTimes for NoFetch {
 /// says the trusted Node/CLI path skips the runtime host gate.
 pub fn context_from(epochs: &str, domains: Vec<String>) -> Result<SealContext> {
     let registry = EpochRegistry::parse(epochs)
-        .map_err(|e| anyhow::anyhow!("epoch registry: {}", e.detail))?;
+        .map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))?;
     binding::validate_whitelist(&domains)
-        .map_err(|e| anyhow::anyhow!("whitelist: {}", e.detail))?;
+        .map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))?;
     Ok(SealContext {
         epochs: registry,
         whitelist: domains,
@@ -104,9 +123,26 @@ pub fn seal_fragment(
     password: Option<String>,
     exp: Option<u64>,
 ) -> Result<String> {
+    seal_fragment_kind(
+        ctx,
+        token,
+        password,
+        exp,
+        mosseal_core::envelope::kind::TOKEN,
+    )
+}
+
+/// Seal `token` with an explicit payload kind (spec 01).
+pub fn seal_fragment_kind(
+    ctx: &SealContext,
+    token: String,
+    password: Option<String>,
+    exp: Option<u64>,
+    kind: u8,
+) -> Result<String> {
     let input = SealInput {
         data: token.into_bytes(),
-        kind: mosseal_core::envelope::kind::TOKEN,
+        kind,
         exp,
         password: password.map(String::into_bytes),
         deterministic_salt: None,
@@ -114,7 +150,7 @@ pub fn seal_fragment(
         deterministic_epoch: None,
     };
     ctx.seal(&input)
-        .map_err(|e| anyhow::anyhow!("{}", e.detail))
+        .map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))
 }
 
 /// Open `fragment`, optionally ignoring expiry (admin debugging).
@@ -135,7 +171,7 @@ pub fn open_fragment(
     } else {
         ctx.open(fragment, pw, &fetcher)
     };
-    result.map_err(|e| anyhow::anyhow!("{}: {}", e.code, e.detail))
+    result.map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))
 }
 
 /// Generate a fresh 32-byte epoch secret as base64url (no padding).
@@ -162,6 +198,7 @@ pub fn run_cli(cli: Cli) -> Result<()> {
             token,
             password,
             exp,
+            kind,
             epochs,
             domains,
         } => {
@@ -170,7 +207,7 @@ pub fn run_cli(cli: Cli) -> Result<()> {
                 None => rpassword::prompt_password("Token to seal: ")?,
             };
             let ctx = context_from(&epochs, domains)?;
-            let frag = seal_fragment(&ctx, token, password, exp)?;
+            let frag = seal_fragment_kind(&ctx, token, password, exp, kind.byte())?;
             println!("{frag}");
             Ok(())
         }
@@ -276,10 +313,10 @@ mod tests {
         // exp far in the past; CLI lenient mode uses the real system clock.
         let frag = seal_fragment(&ctx, "tok".into(), None, Some(1)).unwrap();
 
-        // Normal open rejects it as EXPIRED (thiserror prose, lowercase).
+        // Normal open rejects it as EXPIRED (stable code prefix).
         let err = open_fragment(&ctx, &frag, None, false).unwrap_err();
         assert!(
-            err.to_string().to_lowercase().contains("expired"),
+            err.to_string().contains("EXPIRED"),
             "expected an expiry error, got {err}"
         );
 
@@ -295,8 +332,8 @@ mod tests {
         let frag = seal_fragment(&ctx, "tok".into(), Some("pw".into()), None).unwrap();
         let err = open_fragment(&ctx, &frag, Some("WRONG"), false).unwrap_err();
         assert!(
-            err.to_string().to_lowercase().contains("bad password"),
-            "expected a bad-password error, got {err}"
+            err.to_string().contains("BAD_PASSWORD"),
+            "expected a bad-password code, got {err}"
         );
     }
 

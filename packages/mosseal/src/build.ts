@@ -15,7 +15,6 @@ import {
   cpSync,
   mkdirSync,
   writeFileSync,
-  readFileSync,
   readdirSync,
   rmSync,
   existsSync,
@@ -27,6 +26,7 @@ import { validateEnv, configFingerprint } from "./env.js";
 import { generateSecretsRs, generateMetaJson } from "./codegen.js";
 import { assertToolchain } from "./toolchain.js";
 import { loadEnvFile } from "./dotenv.js";
+import { version } from "./version.js";
 
 /**
  * Package root. The bundled entry is `dist/mosseal.js`, so `import.meta.url`
@@ -115,16 +115,6 @@ export async function cmdBuild(
     return { ok: true, outDir };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
-  }
-}
-
-function version(): string {
-  try {
-    return (
-      JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")).version ?? "0.0.0"
-    );
-  } catch {
-    return "0.0.0";
   }
 }
 

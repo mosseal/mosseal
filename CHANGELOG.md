@@ -8,6 +8,53 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
+### Added
+
+- **Admin commands in the TS CLI** (spec 05) — `npx mosseal gen-secret`, `seal`, and
+  `open` now expose the native `mosseal-cli` trusted-admin surface, so links can be
+  sealed/opened **without a Rust toolchain**. Sealing/opening runs a precompiled admin
+  wasm shipped in the package; `gen-secret` uses `node:crypto`. Epochs/domains resolve
+  from `--epochs`/`--domains`, then `MOSSEAL_EPOCHS`/`MOSSEAL_ALLOWED_DOMAINS`, then the
+  `.env` slots. `--password` takes an optional value (bare `--password` prompts on a TTY
+  with echo off).
+- **`mosseal-admin-wasm`** (crate) — the wasm-bindgen admin surface
+  (`Admin::new/seal/open`) backing the TS CLI's admin commands. Epochs/domains are
+  runtime arguments (no `obfuse!` codegen), and it mirrors `mosseal-cli`'s trusted-path
+  semantics (`runtime_hostname: None`, `TimeMode::Lenient`, no-network fetcher).
+- **`--kind <token|binary-blob>`** on the native `mosseal-cli seal` (spec 01), matching
+  the TS CLI's `--kind`.
+- **`--version` / `-V`** on the TS CLI, matching the native binary.
+- **`scripts/sync-admin-wasm.mjs`** — builds + vendors the admin wasm (a derived
+  artifact, not committed) at `npm pack`/publish time and in CI, mirroring
+  `sync-core-crate.mjs`.
+
+### Fixed
+
+- **CLI error-format parity** — the native `mosseal-cli` printed lowercase prose
+  (`Error: bad password: gcm tag mismatch`) while the TS CLI printed the bare stable
+  code, contradicting spec 05's documented contract. Both surfaces now emit
+  `Error: <CODE>: <detail>` (e.g. `Error: BAD_PASSWORD: gcm tag mismatch`) and exit
+  non-zero, so scripts can match on the code regardless of surface.
+- **TS CLI `--exp` silently dropped the expiry** — a non-integer value (e.g. `--exp abc`)
+  coerced to `NaN`, which the wasm treated as "no expiry". It is now rejected, matching
+  clap's `u64` parse.
+- **TS CLI trimmed empty domain entries** — `--domains "a.test,"` was silently accepted
+  while the native CLI rejects it. The admin wasm now splits on `,` preserving empty
+  entries (matching clap's `value_delimiter`), so both fail with `DOMAIN_MISMATCH`.
+- **TS CLI flag presence** — an explicit `--epochs ""` fell through to `.env` because
+  presence was tested by truthiness; it now reaches the wasm and fails with the same
+  `EPOCH_RETIRED` the native CLI reports.
+
+### Changed
+
+- **Native `mosseal-cli` error output** — errors are now `Error: <CODE>: <detail>`
+  instead of `Error: <lowercase prose>`. The stable code is always the prefix; the
+  human-readable detail follows. **Breaking for scripts that matched the old prose.**
+
+## [0.1.0] - 2026-09-28
+
 ### Added
 
 - **GitHub Packages distribution** — both packages now publish to
@@ -168,4 +215,6 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   unchanged (first success wins). `FetchTimes` gained `fetch_all_unix_secs` (defaulted,
   so existing fetchers are unaffected).
 
-[Unreleased]: https://github.com/mosseal/mosseal/commits/main
+[Unreleased]: https://github.com/mosseal/mosseal/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mosseal/mosseal/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/mosseal/mosseal/commits/v0.1.0
