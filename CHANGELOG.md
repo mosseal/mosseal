@@ -12,6 +12,12 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 
 ### Added
 
+- **Draft Release notes are generated from `CHANGELOG.md`** (spec 06) — the
+  `release` workflow extracts the `[<version>]` section with
+  [`parse-changelog`](https://github.com/taiki-e/parse-changelog) and uses it as the
+  draft Release body (plus a short `next`-dist-tag/artifacts note), instead of a
+  hardcoded string. A missing `CHANGELOG.md` entry now fails the release rather than
+  drafting an empty body.
 - **Native CLI binaries in releases** (spec 06) — the `release` workflow now
   cross-compiles the `mosseal` CLI for every supported platform and attaches one
   archive per target (`mosseal-v<version>-<target>.tar.gz`, `.zip` on Windows) plus a
@@ -30,6 +36,17 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   `taiki-e/install-action` (already used for `cargo-deny`/`cargo-machete`/
   `cargo-llvm-cov`/`cargo-fuzz`), which installs from GitHub Releases with checksum
   verification and tracks the current repo.
+
+### Changed
+
+- **CI tools are pinned to exact versions** (spec 06) — every
+  `taiki-e/install-action` usage now pins the tool version
+  (`wasm-pack@0.15.0`, `parse-changelog@0.6.17`, `cargo-deny@0.20.2`,
+  `cargo-machete@0.9.2`, `cargo-llvm-cov@0.9.1`, `cargo-fuzz@0.13.2`). The unpinned
+  form applies a dependency cooldown and can drift between runs; pinning keeps CI and
+  release builds reproducible. All six were verified against this workspace at those
+  versions (`cargo deny --all-features check`, `cargo machete`, and the wasm-pack
+  builds all pass).
 
 ## [0.2.0] - 2026-09-29
 

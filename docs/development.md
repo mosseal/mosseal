@@ -191,8 +191,27 @@ writes a `SHA256SUMS` covering every attached file.
 | `x86_64-pc-windows-msvc` | windows | zip |
 
 To add a target, add a matrix entry (and, if it needs a non-default runner, its
-`runner`). The release profile already sets `strip = true`, so the action is run
-with `strip: false`.
+`runner`).
+
+Binaries are stripped by Cargo, not by the action: the release profile sets
+`strip = true`, so rustc strips every target at compile time. The action's own
+`strip` input is therefore left `false` — it runs the external `strip` command
+only for **non-cross** builds, so it would be redundant where it applies and
+skipped entirely for the Linux targets (which go through `cross`).
+
+##### Release notes from `CHANGELOG.md`
+
+The draft Release body is generated from the `[<version>]` section of
+[`CHANGELOG.md`](../CHANGELOG.md) by
+[`parse-changelog`](https://github.com/taiki-e/parse-changelog) (installed via
+`taiki-e/install-action`), so the notes are the same prose maintainers already
+review — no separate release-notes file to keep in sync. A short staging note
+(the `next` dist-tag + attached artifacts) is appended below a `---` rule.
+
+`parse-changelog` understands Keep a Changelog headings, including the
+`## [0.2.1] - 2026-09-29` link-text form used here. If the version has no
+`CHANGELOG.md` entry the step **fails** (exit 1) rather than drafting an empty
+body — the release checklist requires the entry anyway.
 
 #### `release-published.yml` — promote `next` → `latest`
 

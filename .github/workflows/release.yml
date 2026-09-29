@@ -112,7 +112,8 @@ jobs:
                   targets: wasm32-unknown-unknown
             - uses: taiki-e/install-action@v2
               with:
-                  tool: wasm-pack
+                  # Pinned for reproducible release builds (see ci.yml).
+                  tool: wasm-pack@0.15.0
             - uses: Swatinem/rust-cache@v2
             - uses: actions/setup-node@v7
               with:
@@ -274,6 +275,34 @@ jobs:
                   sha256sum !(SHA256SUMS) > SHA256SUMS
                   cat SHA256SUMS
 
+            # Release notes come from CHANGELOG.md (the `[<version>]` section),
+            # so the draft body is the same prose maintainers already review.
+            # `parse-changelog` understands Keep a Changelog headings, including
+            # the `## [0.2.1] - 2026-09-29` link-text form used here.
+            - name: install parse-changelog
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: parse-changelog@0.6.17
+
+            - name: build release notes from CHANGELOG.md
+              env:
+                  VERSION: ${{ needs.version.outputs.version }}
+              run: |
+                  set -euo pipefail
+                  # Fail loudly when the version has no CHANGELOG entry — the
+                  # release checklist (docs/versioning.md) requires one, and a
+                  # silent empty body would hide the omission.
+                  parse-changelog CHANGELOG.md "$VERSION" > /tmp/notes.md
+                  # Append the maintainer-facing staging note (dist-tag + artifacts).
+                  {
+                    echo
+                    echo "---"
+                    echo
+                    echo "Published to GitHub Packages under the \`next\` dist-tag as \`@mosseal/core@$VERSION\` and \`@mosseal/cli@$VERSION\`. Native \`mosseal\` CLI binaries are attached for every supported platform (see \`SHA256SUMS\`). Review the attached artifacts, then publish this draft — that promotes \`next\` to \`latest\`."
+                  } >> /tmp/notes.md
+                  echo "----- release notes -----"
+                  cat /tmp/notes.md
+
             - name: create draft GitHub Release
               env:
                   GH_TOKEN: ${{ github.token }}
@@ -281,4 +310,4 @@ jobs:
                   gh release create "v${{ needs.version.outputs.version }}" dist/* \
                     --draft \
                     --title "v${{ needs.version.outputs.version }}" \
-                    --notes "Published to GitHub Packages under the \`next\` dist-tag as \`@mosseal/core@${{ needs.version.outputs.version }}\` and \`@mosseal/cli@${{ needs.version.outputs.version }}\`. Native \`mosseal\` CLI binaries are attached for every supported platform (see \`SHA256SUMS\`). Review the attached artifacts, then publish this draft — that promotes \`next\` to \`latest\`."
+                    --notes-file /tmp/notes.md
