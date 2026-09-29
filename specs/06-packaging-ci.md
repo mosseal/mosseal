@@ -83,17 +83,17 @@ Each package ships its own `README.md` (npm renders it on the package page):
 ## Consumer CI (GitHub Actions, GH Pages deploy)
 
 The canonical snippet lives in `packages/mosseal/README.md` § Consumer CI. It uses
-`Swatinem/rust-cache` (caches `~/.cargo` + `target/`) and `jetli/wasm-pack-action`
-(cross-platform; never `curl | sh` on Windows runners), runs `mosseal doctor` for fast
-failure, and passes secrets via env vars (real env wins over `.env`, so no secret file
-is written):
+`Swatinem/rust-cache` (caches `~/.cargo` + `target/`) and `taiki-e/install-action`
+(installs wasm-pack cross-platform; never `curl | sh` on Windows runners), runs
+`mosseal doctor` for fast failure, and passes secrets via env vars (real env wins over
+`.env`, so no secret file is written):
 
 ```yaml
   - uses: dtolnay/rust-toolchain@stable
     with: { targets: wasm32-unknown-unknown }
   - uses: Swatinem/rust-cache@v2
-  - uses: jetli/wasm-pack-action@v0.4.0
-    with: { version: latest }
+  - uses: taiki-e/install-action@v2
+    with: { tool: wasm-pack }
   - uses: actions/setup-node@v4
     with: { node-version: 22, cache: npm }
   - run: npm ci
@@ -138,7 +138,7 @@ compile < 1 min after warm cargo cache.
   strict/lenient net-time matrix via `page.route`, the `MOSSEAL_TIME_SOURCES` custom-source
   case, no-fragment-leak network assertion).
 - Matrix note: dev OS is Windows; CI must not assume `sh` — use cross-platform
-  invocations (`jetli/wasm-pack-action`, `npx`), never `curl | sh` on Windows runners.
+  invocations (`taiki-e/install-action`, `npx`), never `curl | sh` on Windows runners.
 
 `.github/workflows/release.yml` (`workflow_dispatch`): runs the release consistency check
 (`node scripts/release.mjs --check`), and in `release` mode builds + packs both npm

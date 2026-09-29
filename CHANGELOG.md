@@ -8,6 +8,8 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-29
+
 ### Added
 
 - **Native CLI binaries in releases** (spec 06) — the `release` workflow now
@@ -16,6 +18,18 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   `SHA256SUMS` file to the draft GitHub Release. Targets: linux `x86_64`/`aarch64`
   (gnu + musl), macOS `x86_64`/`aarch64`, and Windows `x86_64-msvc`. The workflow is
   restructured into `version` → (`npm`, `binaries`) → `draft-release` jobs.
+
+### Fixed
+
+- **CI `wasm-test` (node) failed to parse the workspace manifests** —
+  `jetli/wasm-pack-action@v0.4.0` could not resolve `version: latest` (the wasm-pack
+  repo moved from `drager/wasm-pack` to `wasm-bindgen/wasm-pack`) and silently fell
+  back to its hardcoded **wasm-pack 0.9.1** (2020), which predates Cargo workspace
+  inheritance and rejected `license.workspace = true` with `invalid type: map,
+  expected a string for key package.license`. All workflows now install wasm-pack via
+  `taiki-e/install-action` (already used for `cargo-deny`/`cargo-machete`/
+  `cargo-llvm-cov`/`cargo-fuzz`), which installs from GitHub Releases with checksum
+  verification and tracks the current repo.
 
 ## [0.2.0] - 2026-09-29
 
@@ -224,6 +238,7 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   unchanged (first success wins). `FetchTimes` gained `fetch_all_unix_secs` (defaulted,
   so existing fetchers are unaffected).
 
-[Unreleased]: https://github.com/mosseal/mosseal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mosseal/mosseal/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/mosseal/mosseal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mosseal/mosseal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mosseal/mosseal/commits/v0.1.0

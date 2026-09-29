@@ -146,9 +146,9 @@ jobs:
               with:
                   targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2
-            - uses: jetli/wasm-pack-action@v0.4.0
+            - uses: taiki-e/install-action@v2
               with:
-                  version: latest
+                  tool: wasm-pack
             # Chrome + matching chromedriver for the browser leg.
             - if: matrix.leg == 'chrome'
               uses: nanasess/setup-chromedriver@v2
@@ -174,9 +174,9 @@ jobs:
               with:
                   targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2
-            - uses: jetli/wasm-pack-action@v0.4.0
+            - uses: taiki-e/install-action@v2
               with:
-                  version: latest
+                  tool: wasm-pack
             - uses: actions/setup-node@v7
               with:
                   node-version: 24
@@ -205,9 +205,9 @@ jobs:
               with:
                   targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2
-            - uses: jetli/wasm-pack-action@v0.4.0
+            - uses: taiki-e/install-action@v2
               with:
-                  version: latest
+                  tool: wasm-pack
             - uses: actions/setup-node@v7
               with:
                   node-version: 24
@@ -248,9 +248,9 @@ jobs:
               with:
                   targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2
-            - uses: jetli/wasm-pack-action@v0.4.0
+            - uses: taiki-e/install-action@v2
               with:
-                  version: latest
+                  tool: wasm-pack
             - uses: actions/setup-node@v7
               with:
                   node-version: 24

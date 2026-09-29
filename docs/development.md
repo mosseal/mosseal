@@ -265,8 +265,9 @@ errors only surface at publish time.
 
 Compile-time injection means the Rust toolchain runs in **your** CI. The canonical
 GitHub Actions snippet (Rust toolchain + `Swatinem/rust-cache` +
-`jetli/wasm-pack-action`, secrets via env vars, `mosseal doctor` for fast failure) lives
-in [`packages/mosseal/README.md`](../packages/mosseal/README.md#consumer-ci-github-actions).
+`taiki-e/install-action` for wasm-pack, secrets via env vars, `mosseal doctor` for fast
+failure) lives in
+[`packages/mosseal/README.md`](../packages/mosseal/README.md#consumer-ci-github-actions).
 
-> **Windows runners:** always use `jetli/wasm-pack-action` (or `npx wasm-pack`), never
+> **Windows runners:** always use `taiki-e/install-action` (or `npx wasm-pack`), never
 > `curl … | sh`.

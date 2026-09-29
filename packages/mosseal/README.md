@@ -203,9 +203,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       # Cross-platform wasm-pack install (do NOT use `curl | sh` on Windows runners).
-      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: taiki-e/install-action@v2
         with:
-          version: latest
+          tool: wasm-pack
 
       - uses: actions/setup-node@v4
         with:
@@ -230,7 +230,7 @@ jobs:
           path: dist
 ```
 
-**Windows runners:** always use `jetli/wasm-pack-action` (or `npx wasm-pack`), never
+**Windows runners:** always use `taiki-e/install-action` (or `npx wasm-pack`), never
 `curl … | sh`.
 
 ## Rotating secrets

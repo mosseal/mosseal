@@ -527,7 +527,7 @@ The full taxonomy is `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`,
 **Deploying to CI?** See [`docs/development.md`](docs/development.md#ci--publishing), and the consumer
 GitHub Actions snippet in
 [`packages/mosseal/README.md`](packages/mosseal/README.md#consumer-ci-github-actions)
-(Rust toolchain + `rust-cache` + `jetli/wasm-pack-action`, secrets via env vars).
+(Rust toolchain + `rust-cache` + `taiki-e/install-action` for wasm-pack, secrets via env vars).
 
 
 ## Development & Testing
