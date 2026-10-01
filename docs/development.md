@@ -143,8 +143,8 @@ flowchart TD
     G -->|"yes"| H["npm publish<br/>OIDC trusted publishing"]
     G -->|"no (first release)"| I["npm stage publish<br/>NPM_TOKEN (stage-only)"]
     I -->|"maintainer approves with 2FA"| I2["npm stage approve STAGE_ID"]
+    I2 -->|"re-run release-npmjs"| H
     H --> J["npmjs<br/>@latest"]
-    I2 --> J
 ```
 
 #### `release.yml` — build, stage under `next`, draft the Release
@@ -259,12 +259,25 @@ and stage)" is being replaced by "Read and write (stage only)" — which cannot 
 `npm publish` at all (it fails with `E_STAGE_REQUIRED`). So `NPM_TOKEN` is a
 granular access token with **Read and write (stage only)** for the `@mosseal`
 scope, and the fallback runs `npm stage publish` (which never prompts for 2FA).
-A maintainer then approves the staged version with 2FA:
 
-```bash
-npm stage list                 # find the stage-id
-npm stage approve <stage-id>   # prompts for 2FA
-```
+A stage-only token cannot publish, and approval needs an interactive 2FA prompt the
+runner cannot provide, so the bootstrap is **two-phase**:
+
+1. Run `release-npmjs` with `mode=publish` → both packages are **staged** (a
+   `0.0.0-stage` placeholder is created for each, since neither exists yet). The
+   workflow captures each stage id from `npm stage publish --json` and writes the
+   exact `npm stage approve <stage-id>` commands to the job summary.
+2. Approve each staged version with 2FA — this is the manual step that puts the
+   first version online. Copy the commands from the run summary, or look the ids up
+   yourself:
+
+   ```bash
+   npm stage list                 # find the stage-id
+   npm stage approve <stage-id>   # prompts for 2FA
+   ```
+
+3. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
+   publish via OIDC.
 
 Token auth does not get automatic provenance, so the fallback requests
 `--provenance` explicitly. Once both packages exist, configure the trusted
@@ -275,9 +288,11 @@ is *not* enough — org access only covers org settings, teams, and users, and "
 not give the token the right to publish packages managed by the organization". The
 token needs package/scope access to `@mosseal`.
 
-> **Staging idempotency:** the `npm view` skip-check cannot see a staged-but-
-unapproved version, and staged and published versions share one semver index, so
-re-staging the same version fails. Approve a pending stage before re-running.
+> **Staging idempotency:** a package with only a staged placeholder still 404s on
+the registry, so the `exists()` check cannot tell "new" from "staged, awaiting
+approval". Re-staging the same version therefore fails with `E409` (staged and
+published versions share one semver index); the workflow treats `E409` as "already
+staged" and continues rather than aborting.
 
 **One-time setup on npmjs.com, per package** (`@mosseal/core` *and* `@mosseal/cli`):
 Package → Settings → Trusted Publisher → GitHub Actions, with:
@@ -298,12 +313,14 @@ errors only surface at publish time.
 1. Create a granular access token on npmjs.com with **Read and write (stage only)**
    for the `@mosseal` scope, and set it as the `NPM_TOKEN` repo secret.
 2. Run `release-npmjs` with `mode=publish` → both packages are **staged** via token
-   (a `0.0.0-stage` placeholder is created for each, since neither exists yet).
-3. Approve each staged version with 2FA (`npm stage list`, then
-   `npm stage approve <stage-id>`) — this is the manual step that puts the first
-   version online.
-4. Configure the trusted publisher for **each** package on npmjs.com.
-5. Delete the `NPM_TOKEN` secret — subsequent releases use OIDC.
+   (a `0.0.0-stage` placeholder is created for each, since neither exists yet). The
+   run summary lists the exact `npm stage approve <stage-id>` command per package.
+3. Approve each staged version with 2FA — this is the manual step that puts the
+   first version online.
+4. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
+   publish via OIDC.
+5. Configure the trusted publisher for **each** package on npmjs.com.
+6. Delete the `NPM_TOKEN` secret — subsequent releases use OIDC.
 
 > **Registry override gotcha:** the tarballs carry
 > `publishConfig.registry = https://npm.pkg.github.com`, which overrides

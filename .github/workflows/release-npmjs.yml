@@ -15,10 +15,14 @@
 # Auth is npm trusted publishing (OIDC) — no long-lived token for normal releases.
 # The first-ever publish of a package has no trusted publisher to use yet, so it
 # falls back to `secrets.NPM_TOKEN`: a stage-only granular access token (for the
-# `@mosseal` scope) that runs `npm stage publish`. A maintainer approves the staged
-# version with 2FA (`npm stage approve <stage-id>`), after which the package exists
-# and every later release uses OIDC. Once both packages are live, configure the
-# trusted publisher for each and delete the NPM_TOKEN secret.
+# `@mosseal` scope) that runs `npm stage publish`. A stage-only token cannot
+# publish, and approval needs an interactive 2FA prompt this runner cannot provide,
+# so the bootstrap is two-phase:
+#   1. run this workflow → both packages are staged; approve each with 2FA
+#      (`npm stage approve <stage-id>`);
+#   2. re-run this workflow → the packages now exist, so they publish via OIDC.
+# Once both packages are live, configure the trusted publisher for each and delete
+# the NPM_TOKEN secret.
 #
 # One-time setup on npmjs.com, per package (@mosseal/core AND @mosseal/cli):
 #   Package → Settings → Trusted Publisher → GitHub Actions, with:
@@ -149,9 +153,13 @@ jobs:
                   set -euo pipefail
                   VERSION="${{ steps.version.outputs.version }}"
                   REGISTRY=https://registry.npmjs.org
+                  staged_any=false
+                  declare -a STAGED=()
 
                   # Does the package exist on npmjs at all? (200 = yes, 404 = no).
                   # Scoped names need the `/` percent-encoded in the registry URL.
+                  # Note: a package with only a *staged* placeholder still 404s here,
+                  # so this cannot distinguish "new" from "staged, awaiting approval".
                   exists() {
                     local code
                     code=$(curl -s -o /dev/null -w '%{http_code}' \
@@ -159,10 +167,17 @@ jobs:
                     [ "$code" = "200" ]
                   }
 
+                  # Look up the stage id for a package@version from the staging area.
+                  stage_id_for() {
+                    NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage list --json \
+                      --registry="$REGISTRY" 2>/dev/null \
+                      | jq -r --arg n "$1" --arg v "$VERSION" \
+                          '.[] | select(.packageName == $n and .version == $v) | .id' \
+                      | head -n1
+                  }
+
                   # Idempotent: skip a package whose version is already on npmjs,
-                  # so a re-run after a partial failure is safe. (A version that is
-                  # staged but not yet approved is not visible here; re-staging the
-                  # same version fails, so approve the stage before re-running.)
+                  # so a re-run after a partial failure is safe.
                   publish() {
                     local name="$1" file="$2"
                     if npm view "$name@$VERSION" version --registry="$REGISTRY" >/dev/null 2>&1; then
@@ -175,22 +190,66 @@ jobs:
                     if exists "$name"; then
                       echo "::notice::$name exists → trusted publishing (OIDC)"
                       npm publish "$file" --access public --registry="$REGISTRY"
-                    else
-                      echo "::notice::$name is new → bootstrap stage with NPM_TOKEN"
-                      if [ -z "${NPM_TOKEN:-}" ]; then
-                        echo "::error::$name does not exist on npmjs and NPM_TOKEN is not set — cannot bootstrap the first publish"
-                        exit 1
-                      fi
-                      # Stage-only token: `npm publish` would fail with
-                      # E_STAGE_REQUIRED, so stage instead. `npm stage publish`
-                      # never prompts for 2FA; a maintainer approves the stage with
-                      # 2FA afterwards. Token auth does not get automatic
-                      # provenance, so request it explicitly (id-token: write is
-                      # set above).
-                      NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage publish "$file" \
-                        --access public --registry="$REGISTRY" --provenance
-                      echo "::notice::$name@$VERSION staged — approve with: npm stage approve <stage-id>"
+                      return
                     fi
+
+                    echo "::notice::$name is new → bootstrap stage with NPM_TOKEN"
+                    if [ -z "${NPM_TOKEN:-}" ]; then
+                      echo "::error::$name does not exist on npmjs and NPM_TOKEN is not set — cannot bootstrap the first publish"
+                      exit 1
+                    fi
+
+                    # Stage-only token: `npm publish` would fail with
+                    # E_STAGE_REQUIRED, so stage instead. `npm stage publish` never
+                    # prompts for 2FA; a maintainer approves the stage with 2FA
+                    # afterwards. Token auth does not get automatic provenance, so
+                    # request it explicitly (id-token: write is set above).
+                    #
+                    # `--json` makes the stage id machine-readable (`.stageId`);
+                    # stdout is JSON, stderr carries the notices/errors.
+                    local out err rc stage_id
+                    out=$(mktemp); err=$(mktemp)
+                    NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage publish "$file" \
+                      --access public --registry="$REGISTRY" --provenance --json \
+                      >"$out" 2>"$err" && rc=0 || rc=$?
+                    cat "$err" >&2
+
+                    if [ "$rc" -eq 0 ]; then
+                      stage_id=$(jq -r '.stageId // empty' <"$out" || true)
+                    elif grep -q 'E409' "$err"; then
+                      # Already staged (or live) from a previous run — not an error.
+                      echo "::notice::$name@$VERSION already staged; skipping"
+                      stage_id=$(stage_id_for "$name" || true)
+                    else
+                      rm -f "$out" "$err"
+                      return 1
+                    fi
+                    rm -f "$out" "$err"
+
+                    echo "::notice::$name@$VERSION staged (stage-id: ${stage_id:-unknown})"
+                    STAGED+=("$name@$VERSION|${stage_id:-unknown}")
+                    staged_any=true
                   }
                   publish @mosseal/core "/tmp/npmjs/mosseal-core-$VERSION.tgz"
                   publish @mosseal/cli  "/tmp/npmjs/mosseal-cli-$VERSION.tgz"
+
+                  # The bootstrap cannot publish: a stage-only token can only stage,
+                  # and approval needs an interactive 2FA prompt this runner cannot
+                  # provide. Stop here and hand off to a maintainer.
+                  if [ "$staged_any" = true ]; then
+                    {
+                      echo "## Bootstrap: staged for approval"
+                      echo
+                      echo "Approve each staged version with 2FA to publish it:"
+                      echo
+                      echo '```bash'
+                      for entry in "${STAGED[@]}"; do
+                        echo "# ${entry%%|*}"
+                        echo "npm stage approve ${entry##*|}"
+                      done
+                      echo '```'
+                      echo
+                      echo "Then re-run this workflow — the packages will exist and publish via OIDC."
+                    } >> "$GITHUB_STEP_SUMMARY"
+                    echo "::warning::staged — approve with 2FA, then re-run"
+                  fi
