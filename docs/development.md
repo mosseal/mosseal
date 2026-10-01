@@ -263,22 +263,31 @@ scope, and the fallback runs `npm stage publish` (which never prompts for 2FA).
 A stage-only token cannot publish, and approval needs an interactive 2FA prompt the
 runner cannot provide, so the bootstrap is **two-phase**:
 
-1. Run `release-npmjs` with `mode=publish` → both packages are **staged** (a
-   `0.0.0-stage` placeholder is created for each, since neither exists yet). The
-   workflow captures each stage id from `npm stage publish --json` and prints the
-   exact `npm stage approve <stage-id>` commands to the job log **and** the run's
-   **Summary** tab.
-2. Approve each staged version with 2FA — this is the manual step that puts the
-   first version online. Copy the commands from the run summary, or look the ids up
-   yourself:
+**Phase 1 — stage (CI) + approve (human, 2FA).** Run `release-npmjs` with
+`mode=publish`: both packages are staged, and npm creates a public `0.0.0-stage`
+placeholder for each (neither package exists yet). The workflow captures each stage
+id (from `npm stage publish --json`) and prints the exact
+`npm stage approve <stage-id>` commands to the job log and the run's **Summary**
+tab. Approving is the manual step that puts the first version online:
 
-   ```bash
-   npm stage list                 # find the stage-id
-   npm stage approve <stage-id>   # prompts for 2FA
-   ```
+```bash
+npm stage list @mosseal/core@*   # filtered; the @* is required
+npm stage approve <stage-id>     # prompts for 2FA
+```
 
-3. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
-   publish via OIDC.
+If the list comes up empty, the id is still in the log of the run that staged the
+package — npm prints `+ <pkg>@<ver> (staged with id <uuid>)` — and approving by id
+works regardless. The web Staged Packages page only lists *personal* packages, so
+org packages are CLI-only.
+
+> **Local `.npmrc` gotcha:** a user-level `.npmrc` that maps `@mosseal` to GitHub
+> Packages (easy to pick up from the install docs) silently sends `npm stage list`
+> and `npm unpublish` to `npm.pkg.github.com`, where they report nothing or fail
+> with 403. Pass `--registry=https://registry.npmjs.org` on any local npm command
+> that touches these packages.
+
+**Phase 2 — publish via OIDC (CI).** Re-run `release-npmjs` with `mode=publish`.
+The packages now exist, so the `exists()` check passes and they publish via OIDC.
 
 Token auth does not get automatic provenance, so the fallback requests
 `--provenance` explicitly. Once both packages exist, configure the trusted
@@ -317,9 +326,10 @@ errors only surface at publish time.
    (a `0.0.0-stage` placeholder is created for each, since neither exists yet). The
    job log and run summary list the exact `npm stage approve <stage-id>` command
    per package.
-3. Approve each staged version with 2FA — this is the manual step that puts the
-   first version online.
-4. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
+3. Approve each staged version with 2FA — `npm stage list @mosseal/core@*` (and
+   `@mosseal/cli@*`), then `npm stage approve <stage-id>`. The web Staged Packages
+   page only lists personal packages, so the CLI is the only path for org packages.
+   This is the manual step that puts the first version online.4. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
    publish via OIDC.
 5. Configure the trusted publisher for **each** package on npmjs.com.
 6. Delete the `NPM_TOKEN` secret — subsequent releases use OIDC.

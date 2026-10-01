@@ -167,12 +167,15 @@ jobs:
                     [ "$code" = "200" ]
                   }
 
-                  # Look up the stage id for a package@version from the staging area.
-                  # `npm stage list --json` returns an array of items (or an object
-                  # with an `items` array); match on package name + version.
+                  # Look up the stage id for a package from the staging area.
+                  # The list is filtered by package ("$1@*" — the @* is required;
+                  # a bare name is a usage error). The unfiltered list and the
+                  # profile Staged Packages page can omit org packages, so never
+                  # rely on them. --json returns an array (or an object with an
+                  # `items` array); match on package name + version.
                   stage_id_for() {
                     local json id
-                    if ! json=$(NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage list --json \
+                    if ! json=$(NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage list "$1@*" --json \
                                   --registry="$REGISTRY" 2>&1); then
                       echo "::warning::npm stage list failed: $json" >&2
                       return 0
@@ -216,7 +219,9 @@ jobs:
                     # afterwards. Token auth does not get automatic provenance, so
                     # request it explicitly (id-token: write is set above).
                     #
-                    # `--json` makes the stage id machine-readable (`.stageId`);
+                    # `--json` makes the stage id machine-readable; the output is
+                    # an object keyed by package name:
+                    #   {"@mosseal/core": {"name": ..., "stageId": "<uuid>"}}
                     # stdout is JSON, stderr carries the notices/errors.
                     local out err rc stage_id
                     out=$(mktemp); err=$(mktemp)
@@ -226,7 +231,7 @@ jobs:
                     cat "$err" >&2
 
                     if [ "$rc" -eq 0 ]; then
-                      stage_id=$(jq -r '.stageId // empty' <"$out" || true)
+                      stage_id=$(jq -r --arg n "$name" '.[$n].stageId // empty' <"$out" || true)
                     elif grep -q 'E409' "$err"; then
                       # Already staged (or live) from a previous run — not an error.
                       echo "::notice::$name@$VERSION already staged; skipping"
@@ -261,10 +266,12 @@ jobs:
                         if [ "$id" != "unknown" ]; then
                           echo "npm stage approve $id"
                         else
-                          echo "npm stage list   # find the stage-id for $pkg"
+                          echo "npm stage list ${pkg%@*}@*   # find the stage-id for $pkg"
                         fi
                       done
                       echo '```'
+                      echo
+                      echo "If the list comes up empty (it can for org packages), the stage id is in the log of the run that staged it — npm prints \`+ <pkg>@<ver> (staged with id <uuid>)\`."
                       echo
                       echo "Then re-run this workflow — the packages will exist and publish via OIDC."
                     } | tee -a "$GITHUB_STEP_SUMMARY"
