@@ -278,7 +278,9 @@ jobs:
             # Release notes come from CHANGELOG.md (the `[<version>]` section),
             # so the draft body is the same prose maintainers already review.
             # `parse-changelog` understands Keep a Changelog headings, including
-            # the `## [0.2.1] - 2026-09-29` link-text form used here.
+            # the `## [0.2.1] - 2026-09-29` link-text form used here. A version
+            # without a CHANGELOG entry is fine: the draft simply omits the
+            # version notes (the staging note below is still appended).
             - name: install parse-changelog
               uses: taiki-e/install-action@v2
               with:
@@ -289,10 +291,15 @@ jobs:
                   VERSION: ${{ needs.version.outputs.version }}
               run: |
                   set -euo pipefail
-                  # Fail loudly when the version has no CHANGELOG entry — the
-                  # release checklist (docs/versioning.md) requires one, and a
-                  # silent empty body would hide the omission.
-                  parse-changelog CHANGELOG.md "$VERSION" > /tmp/notes.md
+                  # Optional: a version with no CHANGELOG entry yields an empty
+                  # notes file instead of failing the release (parse-changelog
+                  # exits non-zero when the version is absent; its stderr is
+                  # still printed so a malformed CHANGELOG is not silently lost).
+                  if ! parse-changelog CHANGELOG.md "$VERSION" > /tmp/notes.md 2>/tmp/parse-changelog.err; then
+                    echo "::notice::no CHANGELOG entry for $VERSION — draft omits version notes"
+                    cat /tmp/parse-changelog.err >&2 || true
+                    : > /tmp/notes.md
+                  fi
                   # Append the maintainer-facing staging note (dist-tag + artifacts).
                   {
                     echo

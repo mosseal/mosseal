@@ -83,7 +83,9 @@ node scripts/release.mjs --print
 node scripts/release.mjs --sync
 ```
 
-1. Update [`CHANGELOG.md`](../CHANGELOG.md) under a new version heading. *(manual)*
+1. Update [`CHANGELOG.md`](../CHANGELOG.md) under a new version heading. *(manual —
+   optional: the draft Release simply omits the version notes when the version has no
+   entry)*
 2. Bump `version` in the workspace `Cargo.toml` (`[workspace.package]`), then run
    `node scripts/release.mjs --sync` to propagate it to both `packages/*/package.json`
    files and the template `Cargo.toml` (+ its vendored `mosseal-core-<ver>` path).
