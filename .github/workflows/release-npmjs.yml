@@ -168,12 +168,23 @@ jobs:
                   }
 
                   # Look up the stage id for a package@version from the staging area.
+                  # `npm stage list --json` returns an array of items (or an object
+                  # with an `items` array); match on package name + version.
                   stage_id_for() {
-                    NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage list --json \
-                      --registry="$REGISTRY" 2>/dev/null \
-                      | jq -r --arg n "$1" --arg v "$VERSION" \
-                          '.[] | select(.packageName == $n and .version == $v) | .id' \
-                      | head -n1
+                    local json id
+                    if ! json=$(NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage list --json \
+                                  --registry="$REGISTRY" 2>&1); then
+                      echo "::warning::npm stage list failed: $json" >&2
+                      return 0
+                    fi
+                    id=$(jq -r --arg n "$1" --arg v "$VERSION" '
+                      (if type == "array" then . else .items end)
+                      | .[] | select(.packageName == $n and .version == $v) | .id
+                    ' <<<"$json" 2>/dev/null | head -n1)
+                    if [ -z "$id" ]; then
+                      echo "::warning::no stage id for $1@$VERSION in: $json" >&2
+                    fi
+                    printf '%s' "$id"
                   }
 
                   # Idempotent: skip a package whose version is already on npmjs,
@@ -244,12 +255,18 @@ jobs:
                       echo
                       echo '```bash'
                       for entry in "${STAGED[@]}"; do
-                        echo "# ${entry%%|*}"
-                        echo "npm stage approve ${entry##*|}"
+                        pkg="${entry%%|*}"
+                        id="${entry##*|}"
+                        echo "# $pkg"
+                        if [ "$id" != "unknown" ]; then
+                          echo "npm stage approve $id"
+                        else
+                          echo "npm stage list   # find the stage-id for $pkg"
+                        fi
                       done
                       echo '```'
                       echo
                       echo "Then re-run this workflow — the packages will exist and publish via OIDC."
-                    } >> "$GITHUB_STEP_SUMMARY"
+                    } | tee -a "$GITHUB_STEP_SUMMARY"
                     echo "::warning::staged — approve with 2FA, then re-run"
                   fi

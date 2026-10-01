@@ -265,8 +265,9 @@ runner cannot provide, so the bootstrap is **two-phase**:
 
 1. Run `release-npmjs` with `mode=publish` → both packages are **staged** (a
    `0.0.0-stage` placeholder is created for each, since neither exists yet). The
-   workflow captures each stage id from `npm stage publish --json` and writes the
-   exact `npm stage approve <stage-id>` commands to the job summary.
+   workflow captures each stage id from `npm stage publish --json` and prints the
+   exact `npm stage approve <stage-id>` commands to the job log **and** the run's
+   **Summary** tab.
 2. Approve each staged version with 2FA — this is the manual step that puts the
    first version online. Copy the commands from the run summary, or look the ids up
    yourself:
@@ -314,7 +315,8 @@ errors only surface at publish time.
    for the `@mosseal` scope, and set it as the `NPM_TOKEN` repo secret.
 2. Run `release-npmjs` with `mode=publish` → both packages are **staged** via token
    (a `0.0.0-stage` placeholder is created for each, since neither exists yet). The
-   run summary lists the exact `npm stage approve <stage-id>` command per package.
+   job log and run summary list the exact `npm stage approve <stage-id>` command
+   per package.
 3. Approve each staged version with 2FA — this is the manual step that puts the
    first version online.
 4. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
