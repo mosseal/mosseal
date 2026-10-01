@@ -4,26 +4,21 @@
 #   release.yml            → publishes under the `next` dist-tag + drafts a Release
 #   release-published.yml  → promotes `next` → `latest` when the draft is published
 #
-# This workflow is the *second* registry. It is manual and gated: it refuses to
-# run unless `release-published` has already succeeded for the version — i.e. the
-# version is live on GitHub Packages under the `latest` dist-tag. It then
-# re-publishes the exact tarballs attached to the GitHub Release to npmjs, so both
-# registries serve byte-identical artifacts.
+# This workflow is the *second* registry. It is manual and gated: it refuses to run
+# unless the version is already live on GitHub Packages under `latest`, then
+# re-publishes the exact tarballs attached to the GitHub Release, so both registries
+# serve byte-identical artifacts.
 #
 #   mode=check   (default): verify the gate only. No side effects.
 #   mode=publish:           download the Release tarballs and publish to npmjs.
 #
-# Auth uses npm **trusted publishing** (OIDC) — no long-lived token for normal
-# releases. The npm CLI detects the GitHub Actions OIDC environment and exchanges
-# it for a short-lived publish token. Provenance attestations are generated
-# automatically (public repo + public package).
-#
-# BOOTSTRAP: a trusted publisher can only be configured on a package that already
-# exists on npmjs.com, so the *first* publish of each package has no OIDC trust to
-# use. The publish step detects this (the package 404s on the registry) and falls
-# back to `secrets.NPM_TOKEN` for that one publish. After the first release:
-#   1. configure the trusted publisher on npmjs.com (see below), then
-#   2. revoke the NPM_TOKEN — it is only needed for the bootstrap.
+# Auth is npm trusted publishing (OIDC) — no long-lived token for normal releases.
+# The first-ever publish of a package has no trusted publisher to use yet, so it
+# falls back to `secrets.NPM_TOKEN`: a stage-only granular access token (for the
+# `@mosseal` scope) that runs `npm stage publish`. A maintainer approves the staged
+# version with 2FA (`npm stage approve <stage-id>`), after which the package exists
+# and every later release uses OIDC. Once both packages are live, configure the
+# trusted publisher for each and delete the NPM_TOKEN secret.
 #
 # One-time setup on npmjs.com, per package (@mosseal/core AND @mosseal/cli):
 #   Package → Settings → Trusted Publisher → GitHub Actions, with:
@@ -34,7 +29,7 @@
 #   The workflow filename must match this file exactly, and `repository.url` in
 #   each package.json must match the GitHub repo (it does).
 #
-# Requires npm CLI >= 11.5.1 and Node >= 22.14 (this workflow uses Node 24).
+# Requires npm CLI >= 11.15.0 and Node >= 22.14 (this workflow uses Node 24).
 
 name: release-npmjs
 
@@ -136,19 +131,19 @@ jobs:
                     --dir /tmp/npmjs
                   ls -l /tmp/npmjs
 
-            # Auth: trusted publishing (OIDC) for packages that already exist on
-            # npmjs; `NPM_TOKEN` only for the first-ever publish of a package
-            # (a trusted publisher cannot be configured before the package exists).
+            # Auth: OIDC for packages that already exist on npmjs; the stage-only
+            # NPM_TOKEN bootstrap for the first-ever publish of a package.
             #
             # `--registry` is REQUIRED: the tarballs carry
-            # `publishConfig.registry = https://npm.pkg.github.com`, and that
-            # overrides setup-node's `registry-url` (a userconfig value). Only the
-            # explicit CLI flag wins, so without it the publish would target
-            # GitHub Packages and OIDC auth would fail.
+            # `publishConfig.registry = https://npm.pkg.github.com`, which overrides
+            # setup-node's `registry-url` (a userconfig value). Only the explicit CLI
+            # flag wins, so without it the publish would target GitHub Packages and
+            # OIDC auth would fail.
             - name: publish to npmjs
               if: inputs.mode == 'publish'
               env:
-                  # Only used for the bootstrap path below; empty is fine otherwise.
+                  # Stage-only granular access token; only used for the bootstrap
+                  # path below. Empty is fine once both packages exist.
                   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
               run: |
                   set -euo pipefail
@@ -165,7 +160,9 @@ jobs:
                   }
 
                   # Idempotent: skip a package whose version is already on npmjs,
-                  # so a re-run after a partial failure is safe.
+                  # so a re-run after a partial failure is safe. (A version that is
+                  # staged but not yet approved is not visible here; re-staging the
+                  # same version fails, so approve the stage before re-running.)
                   publish() {
                     local name="$1" file="$2"
                     if npm view "$name@$VERSION" version --registry="$REGISTRY" >/dev/null 2>&1; then
@@ -179,15 +176,20 @@ jobs:
                       echo "::notice::$name exists → trusted publishing (OIDC)"
                       npm publish "$file" --access public --registry="$REGISTRY"
                     else
-                      echo "::notice::$name is new → bootstrap publish with NPM_TOKEN"
+                      echo "::notice::$name is new → bootstrap stage with NPM_TOKEN"
                       if [ -z "${NPM_TOKEN:-}" ]; then
                         echo "::error::$name does not exist on npmjs and NPM_TOKEN is not set — cannot bootstrap the first publish"
                         exit 1
                       fi
-                      # Token auth does not get automatic provenance, so request it
-                      # explicitly (id-token: write is set above).
-                      NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish "$file" \
+                      # Stage-only token: `npm publish` would fail with
+                      # E_STAGE_REQUIRED, so stage instead. `npm stage publish`
+                      # never prompts for 2FA; a maintainer approves the stage with
+                      # 2FA afterwards. Token auth does not get automatic
+                      # provenance, so request it explicitly (id-token: write is
+                      # set above).
+                      NODE_AUTH_TOKEN="$NPM_TOKEN" npm stage publish "$file" \
                         --access public --registry="$REGISTRY" --provenance
+                      echo "::notice::$name@$VERSION staged — approve with: npm stage approve <stage-id>"
                     fi
                   }
                   publish @mosseal/core "/tmp/npmjs/mosseal-core-$VERSION.tgz"

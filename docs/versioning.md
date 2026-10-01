@@ -152,6 +152,10 @@ registries serve byte-identical artifacts.
 Auth uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC),
 so there is no long-lived token for normal releases. The first-ever publish of a
 package falls back to the `NPM_TOKEN` secret, because a trusted publisher can only be
-configured on a package that already exists on npmjs. See
+configured on a package that already exists on npmjs. That bootstrap uses **staged
+publishing**: `NPM_TOKEN` is a stage-only granular access token, the workflow runs
+`npm stage publish`, and a maintainer approves the staged version with 2FA
+(`npm stage approve <stage-id>`) to put the first version online. Once the package
+exists, configure trusted publishing and delete `NPM_TOKEN`. See
 [`development.md`](development.md#release-npmjsyml--mirror-to-the-public-npm-registry)
-for the one-time trusted-publisher setup and the bootstrap sequence.
+for the one-time trusted-publisher setup and the full bootstrap sequence.
