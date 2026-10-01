@@ -158,8 +158,11 @@ jobs:
 
                   # Does the package exist on npmjs at all? (200 = yes, 404 = no).
                   # Scoped names need the `/` percent-encoded in the registry URL.
-                  # Note: a package with only a *staged* placeholder still 404s here,
-                  # so this cannot distinguish "new" from "staged, awaiting approval".
+                  # Note: a *pending* stage still 404s here, so this cannot
+                  # distinguish "new" from "staged, awaiting approval". A failed
+                  # stage can however leave an orphaned `0.0.0-stage` package doc
+                  # behind, which returns 200 — the flow then continues via OIDC,
+                  # which is fine once the trusted publisher is configured.
                   exists() {
                     local code
                     code=$(curl -s -o /dev/null -w '%{http_code}' \
@@ -233,9 +236,21 @@ jobs:
                     if [ "$rc" -eq 0 ]; then
                       stage_id=$(jq -r --arg n "$name" '.[$n].stageId // empty' <"$out" || true)
                     elif grep -q 'E409' "$err"; then
-                      # Already staged (or live) from a previous run — not an error.
-                      echo "::notice::$name@$VERSION already staged; skipping"
+                      # E409: the version already exists in the live registry or
+                      # the staging area. Live versions were skipped above, so
+                      # this is either a stage record from a previous run, or a
+                      # *burned* version: npm never allows reusing a version
+                      # number after it was published and then unpublished.
                       stage_id=$(stage_id_for "$name" || true)
+                      if [ -n "$stage_id" ]; then
+                        echo "::notice::$name@$VERSION already staged; stage-id: $stage_id"
+                      else
+                        echo "::error::$name@$VERSION conflicts on npmjs (E409) but no stage record is visible."
+                        echo "::error::Most likely $VERSION was published and unpublished on npmjs before — burned version numbers cannot be reused. Bump the version and release again."
+                        echo "::error::Otherwise a stage exists that 'npm stage list' cannot see — check the log of the run that staged it for 'staged with id <uuid>'."
+                        rm -f "$out" "$err"
+                        return 1
+                      fi
                     else
                       rm -f "$out" "$err"
                       return 1
