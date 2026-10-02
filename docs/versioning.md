@@ -97,31 +97,26 @@ node scripts/release.mjs --sync
 5. Regenerate the vendored `packages/mosseal/template/mosseal-core-<ver>.crate` after any
    core source/dependency change. It is a derived artifact and is **not committed** —
    it is regenerated at `npm pack` time (`prepack`) and by `--sync`. *(scripted)*
-6. Tag the release and publish both packages to **GitHub Packages**
-   (`npm.pkg.github.com`, configured via `publishConfig`). *(scripted — the `release`
-   workflow publishes both packages under the `next` dist-tag, cross-compiles the
-   native `mosseal` CLI for every supported platform, then creates the draft Release
-   with the npm tarballs, the native archives, and a `SHA256SUMS` file attached)*
-7. Publish the draft Release — this promotes `next` → `latest` on GitHub Packages
+6. Tag the release and publish both packages to the **public npm registry**
+   (npmjs). *(scripted — the `release` workflow publishes both packages under the
+   `next` dist-tag, cross-compiles the native `mosseal` CLI for every supported
+   platform, then creates the draft Release with the npm tarballs, the native
+   archives, and a `SHA256SUMS` file attached)*
+7. Publish the draft Release — this promotes `next` → `latest` on npmjs
    (`release-published.yml`). *(manual — review the draft first)*
-8. Mirror the release to the **public npm registry** by running the `release-npmjs`
-   workflow (`workflow_dispatch`, `mode=publish`). It is gated on step 7 having
-   succeeded and re-publishes the Release's tarballs, so both registries serve
-   byte-identical artifacts. *(manual — see
-   [`development.md`](development.md#release-npmjsyml--mirror-to-the-public-npm-registry))*
 
 The `release` GitHub workflow (`.github/workflows/release.yml`, `workflow_dispatch`)
 reads the authoritative version, compares it to the latest `v*` git tag, and **skips
 automatically** when it is not newer. Otherwise it builds + packs both packages,
-publishes them to GitHub Packages under the **`next` dist-tag**, cross-compiles the
-native `mosseal` CLI for every supported platform (one archive per target), and
-creates a **draft** GitHub Release with the npm tarballs, the native archives, and a
+publishes them to npmjs under the **`next` dist-tag**, cross-compiles the native
+`mosseal` CLI for every supported platform (one archive per target), and creates a
+**draft** GitHub Release with the npm tarballs, the native archives, and a
 `SHA256SUMS` file attached.
 
 ### Dist-tag staging (`next` → `latest`)
 
-GitHub Packages has no draft/staging state — `npm publish` is immediate. To keep the
-default install path safe while a release is under review, the workflow publishes under
+npmjs has no draft/staging state — `npm publish` is immediate. To keep the default
+install path safe while a release is under review, the workflow publishes under
 `next`, so `npm install @mosseal/cli` keeps resolving to the previous `latest`:
 
 ```bash
@@ -139,25 +134,17 @@ npm dist-tag add @mosseal/cli@<version> latest
 So the full flow is: run `release` → packages land under `next` → review the draft →
 publish the Release → `latest` moves automatically.
 
-### Mirroring to the public npm registry
+### npm authentication
 
-GitHub Packages is the source of truth, but it requires a token even for public
-installs. To also serve the release from the public npm registry (npmjs), run the
-`release-npmjs` workflow (`workflow_dispatch`, `mode=publish`) **after** the draft
-Release has been published.
+Publishing and dist-tag promotion use npm
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so there is
+no long-lived token to store or rotate, and provenance attestations are generated
+automatically. Configure a trusted publisher on npmjs.com for **each** package
+(`@mosseal/core` and `@mosseal/cli`):
 
-The workflow is gated: it refuses to run unless the version is already live on GitHub
-Packages under `latest` (i.e. `release-published` succeeded), and it re-publishes the
-**exact tarballs attached to the GitHub Release** rather than re-packing — so both
-registries serve byte-identical artifacts.
+- workflow `release.yml` with the `npm publish` action, and
+- workflow `release-published.yml` with the `npm dist-tag` action enabled.
 
-Auth uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC),
-so there is no long-lived token for normal releases. The first-ever publish of a
-package falls back to the `NPM_TOKEN` secret, because a trusted publisher can only be
-configured on a package that already exists on npmjs. That bootstrap uses **staged
-publishing**: `NPM_TOKEN` is a stage-only granular access token, the workflow runs
-`npm stage publish`, and a maintainer approves the staged version with 2FA
-(`npm stage approve <stage-id>`) to put the first version online. Once the package
-exists, configure trusted publishing and delete `NPM_TOKEN`. See
-[`development.md`](development.md#release-npmjsyml--mirror-to-the-public-npm-registry)
-for the one-time trusted-publisher setup and the full bootstrap sequence.
+See
+[`development.md`](development.md#release-publishedyml--promote-next--latest)
+for the one-time trusted-publisher setup.

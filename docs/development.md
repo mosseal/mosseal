@@ -127,24 +127,16 @@ See [`versioning.md`](versioning.md) for the full semver + envelope-version poli
 
 ### Publishing pipeline
 
-Both npm packages ship to **two registries**: GitHub Packages (the source of truth,
-private-by-default) and the public npm registry (npmjs). The flow is staged so a
+Both npm packages ship to the **public npm registry** (npmjs). The flow is staged so a
 release is reviewed before it becomes the default install target.
 
 ```mermaid
 flowchart TD
-    A["release.yml<br/>(workflow_dispatch, prod)"] -->|"build + pack, publish @next"| B["GitHub Packages<br/>@mosseal/core @next<br/>@mosseal/cli @next"]
+    A["release.yml<br/>(workflow_dispatch, prod)"] -->|"build + pack, publish @next"| B["npmjs<br/>@mosseal/core @next<br/>@mosseal/cli @next"]
     A -->|"cross-compile mosseal CLI<br/>per target"| BIN["Native binaries<br/>linux/mac/windows"]
     A -->|"create DRAFT Release<br/>+ attach tarballs, archives, SHA256SUMS"| C["Draft GitHub Release<br/>vX.Y.Z"]
     C -->|"maintainer publishes the draft"| D["release-published.yml<br/>(on: release published)"]
-    D -->|"npm dist-tag add … latest"| E["GitHub Packages<br/>@latest"]
-    E -->|"gate: Release published<br/>+ GP latest == version"| F["release-npmjs.yml<br/>(workflow_dispatch, prod)"]
-    F -->|"download Release tarballs"| G{"package exists<br/>on npmjs?"}
-    G -->|"yes"| H["npm publish<br/>OIDC trusted publishing"]
-    G -->|"no (first release)"| I["npm stage publish<br/>NPM_TOKEN (stage-only)"]
-    I -->|"maintainer approves with 2FA"| I2["npm stage approve STAGE_ID"]
-    I2 -->|"re-run release-npmjs"| H
-    H --> J["npmjs<br/>@latest"]
+    D -->|"npm dist-tag add … latest"| E["npmjs<br/>@latest"]
 ```
 
 #### `release.yml` — build, stage under `next`, draft the Release
@@ -153,7 +145,7 @@ flowchart TD
 `Cargo.toml`, compares it to the latest `v*` git tag, and **skips automatically**
 when it is not newer. Otherwise it:
 
-1. builds + packs both npm packages and publishes them to GitHub Packages under
+1. builds + packs both npm packages and publishes them to npmjs under
 the **`next` dist-tag**;
 2. cross-compiles the native `mosseal` CLI for every supported platform and
 packages one archive per target;
@@ -170,6 +162,12 @@ Publishing under `next` keeps `npm install @mosseal/cli` resolving to the previo
 npm install @mosseal/cli          # previous latest
 npm install @mosseal/cli@next     # the version under review
 ```
+
+npm auth is [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC):
+the npm CLI detects the GitHub Actions OIDC environment and exchanges it for a
+short-lived publish token, so there is no long-lived secret to store or rotate, and
+provenance attestations are generated automatically. This requires `id-token: write`
+and npm CLI ≥ 11.15.0 / Node ≥ 22.14.
 
 ##### Native CLI binaries
 
@@ -217,92 +215,17 @@ body — the release checklist requires the entry anyway.
 #### `release-published.yml` — promote `next` → `latest`
 
 Fires on `release: published`. Takes the version from the release tag (`v<version>`)
-and moves the `latest` dist-tag on GitHub Packages:
+and moves the `latest` dist-tag on npmjs:
 
 ```bash
 npm dist-tag add @mosseal/cli@<version> latest
 ```
 
-#### `release-npmjs.yml` — mirror to the public npm registry
-
-`workflow_dispatch` on `prod`, with `mode: check | publish`. This is the **second
-registry** and is deliberately gated: it refuses to run unless the version is
-already live on GitHub Packages under `latest` (i.e. `release-published` has
-succeeded). It then re-publishes the **exact tarballs attached to the GitHub
-Release**, so both registries serve byte-identical artifacts.
-
-The gate has two checks, both required:
-
-1. `gh release view v<version>` reports `isDraft: false` — a published Release is
-   what fires `release-published`.
-2. `npm view @mosseal/core dist-tags.latest` on GitHub Packages equals the
-   authoritative version — the observable proof `release-published` succeeded.
-   (GitHub Packages requires auth even for reads, so this uses `GITHUB_TOKEN`.)
-
-**Auth — trusted publishing with a staged bootstrap fallback.** Normal publishes
-use npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC): the
-npm CLI detects the GitHub Actions OIDC environment and exchanges it for a
-short-lived publish token, so there is no long-lived secret to store or rotate, and
-provenance attestations are generated automatically. This requires `id-token: write`
-and npm CLI ≥ 11.15.0 / Node ≥ 22.14.
-
-A trusted publisher can only be configured on a package that **already exists** on
-npmjs, so the first-ever publish of each package has no OIDC trust to use. The
-publish step detects this (the package 404s on the registry) and falls back to
-`secrets.NPM_TOKEN` for that one publish. The check is per-package, so it handles
-`@mosseal/core` and `@mosseal/cli` being at different stages.
-
-The bootstrap uses **staged publishing**, not a direct token publish. npm is
-removing direct publishing with granular access tokens in January 2027: bypass-2FA
-tokens lose direct publish (reduced to read + stage), and "Read and write (publish
-and stage)" is being replaced by "Read and write (stage only)" — which cannot run
-`npm publish` at all (it fails with `E_STAGE_REQUIRED`). So `NPM_TOKEN` is a
-granular access token with **Read and write (stage only)** for the `@mosseal`
-scope, and the fallback runs `npm stage publish` (which never prompts for 2FA).
-
-A stage-only token cannot publish, and approval needs an interactive 2FA prompt the
-runner cannot provide, so the bootstrap is **two-phase**:
-
-**Phase 1 — stage (CI) + approve (human, 2FA).** Run `release-npmjs` with
-`mode=publish`: both packages are staged, and npm creates a public `0.0.0-stage`
-placeholder for each (neither package exists yet). The workflow captures each stage
-id (from `npm stage publish --json`) and prints the exact
-`npm stage approve <stage-id>` commands to the job log and the run's **Summary**
-tab. Approving is the manual step that puts the first version online:
-
-```bash
-npm stage list @mosseal/core@*   # filtered; the @* is required
-npm stage approve <stage-id>     # prompts for 2FA
-```
-
-If the list comes up empty, the id is still in the log of the run that staged the
-package — npm prints `+ <pkg>@<ver> (staged with id <uuid>)` — and approving by id
-works regardless. The web Staged Packages page only lists *personal* packages, so
-org packages are CLI-only.
-
-> **Local `.npmrc` gotcha:** a user-level `.npmrc` that maps `@mosseal` to GitHub
-> Packages (easy to pick up from the install docs) silently sends `npm stage list`
-> and `npm unpublish` to `npm.pkg.github.com`, where they report nothing or fail
-> with 403. Pass `--registry=https://registry.npmjs.org` on any local npm command
-> that touches these packages.
-
-**Phase 2 — publish via OIDC (CI).** Re-run `release-npmjs` with `mode=publish`.
-The packages now exist, so the `exists()` check passes and they publish via OIDC.
-
-Token auth does not get automatic provenance, so the fallback requests
-`--provenance` explicitly. Once both packages exist, configure the trusted
-publisher for each and delete `NPM_TOKEN` — every later release uses OIDC.
-
-> **Token scope gotcha:** granting the token **organization** access to `mosseal`
-is *not* enough — org access only covers org settings, teams, and users, and "does
-not give the token the right to publish packages managed by the organization". The
-token needs package/scope access to `@mosseal`.
-
-> **Staging idempotency:** a package with only a staged placeholder still 404s on
-the registry, so the `exists()` check cannot tell "new" from "staged, awaiting
-approval". Re-staging the same version therefore fails with `E409` (staged and
-published versions share one semver index); the workflow treats `E409` as "already
-staged" and continues rather than aborting.
+Auth is npm trusted publishing (OIDC), so the trusted publisher for each package
+must be configured on npmjs.com with this workflow filename
+(`release-published.yml`) and the **`npm dist-tag`** action enabled. OIDC dist-tag
+management requires npm CLI ≥ 11.21.0, so the workflow upgrades the CLI explicitly
+before promoting.
 
 **One-time setup on npmjs.com, per package** (`@mosseal/core` *and* `@mosseal/cli`):
 Package → Settings → Trusted Publisher → GitHub Actions, with:
@@ -311,36 +234,14 @@ Package → Settings → Trusted Publisher → GitHub Actions, with:
 |---|---|
 | Organization or user | `mosseal` |
 | Repository | `mosseal` |
-| Workflow filename | `release-npmjs.yml` (exact, case-sensitive, includes `.yml`) |
+| Workflow filename | `release.yml` (exact, case-sensitive, includes `.yml`) |
 | Allowed actions | `npm publish` |
 
-The workflow filename must match exactly, and `repository.url` in each
-`package.json` must match the GitHub repo. npm does **not** validate on save —
-errors only surface at publish time.
-
-**First-release sequence:**
-
-1. Create a granular access token on npmjs.com with **Read and write (stage only)**
-   for the `@mosseal` scope, and set it as the `NPM_TOKEN` repo secret.
-2. Run `release-npmjs` with `mode=publish` → both packages are **staged** via token
-   (a `0.0.0-stage` placeholder is created for each, since neither exists yet). The
-   job log and run summary list the exact `npm stage approve <stage-id>` command
-   per package.
-3. Approve each staged version with 2FA — `npm stage list @mosseal/core@*` (and
-   `@mosseal/cli@*`), then `npm stage approve <stage-id>`. The web Staged Packages
-   page only lists personal packages, so the CLI is the only path for org packages.
-   This is the manual step that puts the first version online.4. Re-run `release-npmjs` with `mode=publish` → the packages now exist, so they
-   publish via OIDC.
-5. Configure the trusted publisher for **each** package on npmjs.com.
-6. Delete the `NPM_TOKEN` secret — subsequent releases use OIDC.
-
-> **Registry override gotcha:** the tarballs carry
-> `publishConfig.registry = https://npm.pkg.github.com`, which overrides
-> `setup-node`'s `registry-url` (a userconfig value). Only the explicit CLI
-> `--registry` flag wins, so the workflow passes
-> `--registry=https://registry.npmjs.org` on every `npm view` / `npm publish` /
-> `npm stage publish`. Without it the publish would target GitHub Packages and
-> OIDC auth would fail.
+Add a **second** trusted publisher for the same package with workflow filename
+`release-published.yml` and the **`npm dist-tag`** action enabled, so the promote
+workflow can move `latest`. The workflow filename must match exactly, and
+`repository.url` in each `package.json` must match the GitHub repo. npm does **not**
+validate on save — errors only surface at publish time.
 
 ### Deploying a consumer site
 

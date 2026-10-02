@@ -18,17 +18,6 @@ npm install -D @mosseal/cli
 npm install @mosseal/core
 ```
 
-Both packages are published to **GitHub Packages** (`npm.pkg.github.com`). Add an
-`.npmrc` so npm resolves the `@mosseal` scope there:
-
-```ini
-@mosseal:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-`GITHUB_TOKEN` needs the `read:packages` scope (a classic PAT, or the automatic
-`GITHUB_TOKEN` in Actions with `packages: read`).
-
 New versions are published under the **`next` dist-tag** first, so `npm install
 @mosseal/cli` keeps resolving to the previous stable release until the GitHub Release is
 published (which promotes `next` → `latest`). To opt into a version under review:

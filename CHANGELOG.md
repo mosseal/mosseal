@@ -6,7 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 with the envelope-format caveat described in [`docs/versioning.md`](docs/versioning.md).
 
-## [Unreleased]
+## [0.2.3] - 2026-10-01
+
+### Changed
+
+- **npm distribution moved to the public npm registry (npmjs)** — both packages
+  (`@mosseal/core`, `@mosseal/cli`) now publish to `registry.npmjs.org` instead of
+  GitHub Packages. The `release` workflow publishes under the `next` dist-tag via
+  npm trusted publishing (OIDC), and `release-published.yml` promotes `next` →
+  `latest` on npmjs. The separate `release-npmjs` mirror workflow and the
+  `publishConfig.registry` overrides were removed, so no `.npmrc` or token is
+  needed to install the packages.
+
+## [0.2.2] - 2026-10-01
+
+### Changed
+
+- **npmjs bootstrap flow** (spec 06) — the `release-npmjs` workflow now uses
+  **staged publishing** for the first-ever publish of a package: a stage-only
+  granular access token runs `npm stage publish`, the workflow captures each stage
+  id automatically, and a maintainer approves it with 2FA (`npm stage approve`)
+  before the package goes live. Once a package exists, subsequent releases publish
+  via OIDC trusted publishing. The workflow and `docs/development.md` document the
+  full two-phase bootstrap sequence.
+- **Draft Release notes are optional** — a version with no `CHANGELOG.md` entry no
+  longer fails the release; the draft simply omits the version notes (the staging
+  note is still appended).
+
+### Fixed
+
+- **Release CI** — `npm ci` and the release workflow were corrected so the
+  consistency check and package builds run reliably.
 
 ## [0.2.1] - 2026-09-29
 
@@ -255,7 +285,9 @@ with the envelope-format caveat described in [`docs/versioning.md`](docs/version
   unchanged (first success wins). `FetchTimes` gained `fetch_all_unix_secs` (defaulted,
   so existing fetchers are unaffected).
 
-[Unreleased]: https://github.com/mosseal/mosseal/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/mosseal/mosseal/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/mosseal/mosseal/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/mosseal/mosseal/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/mosseal/mosseal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mosseal/mosseal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mosseal/mosseal/commits/v0.1.0

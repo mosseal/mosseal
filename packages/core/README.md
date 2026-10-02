@@ -14,17 +14,6 @@ npm install @mosseal/core
 npm install -D @mosseal/cli   # the CLI that builds your per-consumer wasm
 ```
 
-Both packages are published to **GitHub Packages** (`npm.pkg.github.com`). Add an
-`.npmrc` so npm resolves the `@mosseal` scope there:
-
-```ini
-@mosseal:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-`GITHUB_TOKEN` needs the `read:packages` scope (a classic PAT, or the automatic
-`GITHUB_TOKEN` in Actions with `packages: read`).
-
 ## Usage
 
 ```ts

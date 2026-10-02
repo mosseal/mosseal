@@ -1,6 +1,6 @@
 {
   "name": "@mosseal/cli",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "CLI builder for MOSSEAL: validates env, injects secrets via Rust codegen, and compiles the per-consumer wasm (spec 05).",
   "type": "module",
   "bin": {
@@ -41,9 +41,6 @@
     "type": "git",
     "url": "git+https://github.com/mosseal/mosseal.git",
     "directory": "packages/mosseal"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   },
   "license": "MIT OR Apache-2.0"
 }

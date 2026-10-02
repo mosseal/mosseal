@@ -1,6 +1,6 @@
 {
   "name": "@mosseal/core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "TypeScript wrapper for MOSSEAL consumer-compiled wasm (spec 04). Loads wasm, handles URL fragments, mirrors the wasm error taxonomy.",
   "type": "module",
   "main": "./dist/index.js",
@@ -47,9 +47,6 @@
     "type": "git",
     "url": "git+https://github.com/mosseal/mosseal.git",
     "directory": "packages/core"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   },
   "license": "MIT OR Apache-2.0"
 }

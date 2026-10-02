@@ -23,8 +23,7 @@ types.
   "name": "@mosseal/cli",
   "bin": { "mosseal": "./dist/mosseal.js" },
   "files": ["dist/", "template/"],          // dist/ = bundled CLI; template/ = pinned Rust wasm template + vendored mosseal-core crate
-  "engines": { "node": "^20.19.0 || >=22.12.0" },
-  "publishConfig": { "registry": "https://npm.pkg.github.com" }
+  "engines": { "node": "^20.19.0 || >=22.12.0" }
   // zero runtime dependencies — the .env parser is internal (spec 05)
 }
 ```
@@ -142,12 +141,13 @@ compile < 1 min after warm cargo cache.
 
 `.github/workflows/release.yml` (`workflow_dispatch`): runs the release consistency check
 (`node scripts/release.mjs --check`), and in `release` mode builds + packs both npm
-packages (publishing them under the `next` dist-tag), cross-compiles the native `mosseal`
-CLI for every supported platform (one archive per target, via
-`houseabsolute/actions-rust-cross`), and creates a draft GitHub Release with the npm
-tarballs, the native archives, and a `SHA256SUMS` file attached. The job graph is
-`version` → (`npm`, `binaries`) → `draft-release`, so the version decision is made once
-and both build jobs gate on it.
+packages (publishing them to the public npm registry under the `next` dist-tag via OIDC
+trusted publishing), cross-compiles the native `mosseal` CLI for every supported platform
+(one archive per target, via `houseabsolute/actions-rust-cross`), and creates a draft
+GitHub Release with the npm tarballs, the native archives, and a `SHA256SUMS` file
+attached. The job graph is `version` → (`npm`, `binaries`) → `draft-release`, so the
+version decision is made once and both build jobs gate on it. Publishing the draft fires
+`release-published.yml`, which promotes `next` → `latest` on npmjs.
 
 ## Static hosting notes
 

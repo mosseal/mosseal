@@ -7,17 +7,22 @@
 #
 #   mode=check   (default): report the authoritative version and whether it is
 #                           newer than the latest `v*` git tag. No side effects.
-#   mode=release:           build + pack both npm packages, publish them to GitHub
-#                           Packages under the `next` dist-tag, cross-compile the
-#                           native `mosseal` CLI for every supported platform, and
-#                           create a DRAFT GitHub Release with the npm tarballs,
-#                           one archive per target, and a SHA256SUMS file attached.
-#                           Automatically SKIPPED when the authoritative version is
-#                           not newer than the latest `v*` git tag.
+#   mode=release:           build + pack both npm packages, publish them to the
+#                           public npm registry (npmjs) under the `next` dist-tag,
+#                           cross-compile the native `mosseal` CLI for every
+#                           supported platform, and create a DRAFT GitHub Release
+#                           with the npm tarballs, one archive per target, and a
+#                           SHA256SUMS file attached. Automatically SKIPPED when the
+#                           authoritative version is not newer than the latest `v*`
+#                           git tag.
 #
 # Publishing uses the `next` dist-tag so `npm install @mosseal/cli` keeps resolving
 # to the previous `latest` until the draft Release is published — see
 # `release-published.yml`, which promotes `next` → `latest`.
+#
+# npm auth is trusted publishing (OIDC) — no long-lived token. The trusted
+# publisher for each package must be configured on npmjs.com with this workflow
+# filename (`release.yml`) and the `npm publish` action.
 #
 # Job graph:
 #   version ──┬─> npm ──────┐
@@ -87,19 +92,19 @@ jobs:
                     echo "::notice::skipping — $VERSION is not newer than latest tag v$LAST"
                   fi
 
-    # npm packages: build + pack both, publish them to GitHub Packages under the
-    # `next` dist-tag, and upload the tarballs so the draft Release can attach
-    # them. Publish runs BEFORE the draft Release (which creates the tag) so a
-    # failed publish leaves no tag and can be retried.
+    # npm packages: build + pack both, publish them to the public npm registry
+    # (npmjs) under the `next` dist-tag, and upload the tarballs so the draft
+    # Release can attach them. Publish runs BEFORE the draft Release (which
+    # creates the tag) so a failed publish leaves no tag and can be retried.
     npm:
         name: npm packages
         needs: version
         if: inputs.mode == 'release' && needs.version.outputs.should_release == 'true'
         runs-on: ubuntu-latest
-        # `packages: write` publishes to GitHub Packages.
+        # `id-token: write` is npm trusted publishing (OIDC) — no long-lived token.
         permissions:
             contents: read
-            packages: write
+            id-token: write
         steps:
             - uses: actions/checkout@v6
               with:
@@ -118,6 +123,8 @@ jobs:
             - uses: actions/setup-node@v7
               with:
                   node-version: 24
+                  # Points npm at npmjs; auth comes from OIDC, not a token.
+                  registry-url: https://registry.npmjs.org
                   # Never cache in release builds.
                   package-manager-cache: false
 
@@ -126,33 +133,27 @@ jobs:
                   (cd packages/core && npm ci && npm run build && npm pack --pack-destination /tmp)
                   (cd packages/mosseal && npm ci && npm run build && npm pack --pack-destination /tmp)
 
-            - name: publish to GitHub Packages (next)
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: publish to npmjs (next)
               run: |
                   set -euo pipefail
                   VERSION="${{ needs.version.outputs.version }}"
-                  # Auth via a temp npmrc so the repo's npm config is untouched.
-                  NPMRC="$(mktemp)"
-                  printf '//npm.pkg.github.com/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$NPMRC"
-                  export NPM_CONFIG_USERCONFIG="$NPMRC"
+                  REGISTRY=https://registry.npmjs.org
 
                   # Idempotent: skip a package whose version is already published,
                   # so a re-run after a partial failure is safe.
                   publish() {
                     local name="$1" file="$2"
-                    if npm view "$name@$VERSION" version \
-                         --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+                    if npm view "$name@$VERSION" version --registry="$REGISTRY" >/dev/null 2>&1; then
                       echo "::notice::$name@$VERSION already published; skipping"
                     else
                       # `next` keeps `latest` on the previous release until the
                       # draft Release is published (release-published.yml promotes).
-                      npm publish "$file" --tag=next --registry=https://npm.pkg.github.com
+                      # `--access public` overrides the scoped-package default.
+                      npm publish "$file" --tag=next --access public --registry="$REGISTRY"
                     fi
                   }
                   publish @mosseal/core "/tmp/mosseal-core-$VERSION.tgz"
                   publish @mosseal/cli  "/tmp/mosseal-cli-$VERSION.tgz"
-                  rm -f "$NPMRC"
 
             - name: upload npm tarballs
               uses: actions/upload-artifact@v7
@@ -305,7 +306,7 @@ jobs:
                     echo
                     echo "---"
                     echo
-                    echo "Published to GitHub Packages under the \`next\` dist-tag as \`@mosseal/core@$VERSION\` and \`@mosseal/cli@$VERSION\`. Native \`mosseal\` CLI binaries are attached for every supported platform (see \`SHA256SUMS\`). Review the attached artifacts, then publish this draft — that promotes \`next\` to \`latest\`."
+                    echo "Published to the public npm registry under the \`next\` dist-tag as \`@mosseal/core@$VERSION\` and \`@mosseal/cli@$VERSION\`. Native \`mosseal\` CLI binaries are attached for every supported platform (see \`SHA256SUMS\`). Review the attached artifacts, then publish this draft — that promotes \`next\` to \`latest\`."
                   } >> /tmp/notes.md
                   echo "----- release notes -----"
                   cat /tmp/notes.md
