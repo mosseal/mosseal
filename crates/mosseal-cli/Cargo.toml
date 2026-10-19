@@ -21,6 +21,9 @@ anyhow.workspace = true
 base64.workspace = true
 rand.workspace = true
 rpassword = "7.5"
+# slots-file / hidden-slots-file JSON parsing (seal-multi, seal-deniable)
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2"

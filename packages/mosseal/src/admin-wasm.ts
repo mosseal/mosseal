@@ -34,17 +34,52 @@ interface AdminHandle {
     expSecs: number | null | undefined,
     kind: number | null | undefined
   ): string;
+  sealMulti(slotsJson: string, expSecs: number | null | undefined): string;
+  sealDeniable(
+    coverJson: string,
+    hiddenJson: string,
+    sizeClass: number | null | undefined
+  ): string;
   open(
     fragment: string,
     password: string | null | undefined,
     ignoreExpiry: boolean | null | undefined
-  ): { data: string; exp: number; kind: number };
+  ): { data: string; exp: number; kind: number; version: number };
+  openHidden(
+    fragment: string,
+    coverPassword: string | null | undefined,
+    hiddenPassword: string | null | undefined,
+    ignoreExpiry: boolean | null | undefined
+  ): { data: string; exp: number; kind: number; version: number };
   free(): void;
 }
 
 /** Payload kind bytes (spec 01). */
 export const KIND_TOKEN = 1;
 export const KIND_BINARY_BLOB = 2;
+
+/** One slot of a multi-secret seal (spec 01 § MULTI kind). */
+export interface AdminSlot {
+  password: string;
+  data: string;
+  kind?: number;
+  expSecs?: number;
+}
+
+/** Deniable seal configuration (spec 09). */
+export interface AdminDeniableCover {
+  mode?: "hidden" | "plain";
+  password?: string;
+  decoy?: string;
+}
+
+export interface AdminDeniableHidden {
+  password: string;
+  data?: string;
+  kind?: number;
+  expSecs?: number;
+  slots?: AdminSlot[];
+}
 
 let cached: AdminWasmModule | null = null;
 
@@ -101,14 +136,45 @@ export class Admin {
     );
   }
 
-  /** Open and verify a fragment; returns `{ data, exp, kind }`. */
+  /** Seal N password-keyed secrets into one `MULTI` fragment (spec 01). */
+  sealMulti(slots: AdminSlot[], expSecs?: number): string {
+    return this.handle.sealMulti(JSON.stringify(slots), expSecs ?? null);
+  }
+
+  /** Seal a deniable link (spec 09). */
+  sealDeniable(
+    cover: AdminDeniableCover,
+    hidden: AdminDeniableHidden,
+    sizeClass?: 1 | 2 | 4
+  ): string {
+    return this.handle.sealDeniable(
+      JSON.stringify(cover),
+      JSON.stringify(hidden),
+      sizeClass ?? null
+    );
+  }
+
+  /** Open and verify a fragment; returns `{ data, exp, kind, version }`. */
   open(
     fragment: string,
     opts: { password?: string; ignoreExpiry?: boolean } = {}
-  ): { data: string; exp: number; kind: number } {
+  ): { data: string; exp: number; kind: number; version: number } {
     return this.handle.open(
       fragment,
       opts.password ?? null,
+      opts.ignoreExpiry ?? false
+    );
+  }
+
+  /** Open a deniable link's hidden layer (spec 09). */
+  openHidden(
+    fragment: string,
+    opts: { coverPassword?: string; hiddenPassword?: string; ignoreExpiry?: boolean } = {}
+  ): { data: string; exp: number; kind: number; version: number } {
+    return this.handle.openHidden(
+      fragment,
+      opts.coverPassword ?? null,
+      opts.hiddenPassword ?? null,
       opts.ignoreExpiry ?? false
     );
   }

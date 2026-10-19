@@ -71,6 +71,41 @@ impl std::fmt::Debug for DerivedKey {
     }
 }
 
+/// v2 key commitment for a derived key: SHA-256("mosseal/v2" ‖ key)[..16].
+///
+/// Canonical construction lives in [`crate::envelope::key_commit`]; this
+/// re-export keeps the commitment next to the key it commits.
+pub fn key_commit(key: &DerivedKey) -> [u8; 16] {
+    crate::envelope::key_commit::build(&key.0)
+}
+
+/// Domain tag for the deniable offset derivation (spec 09). Occupies the
+/// "secret" slot of the standard Argon2id input construction so the offset
+/// derive is domain-separated from every envelope-key derive, while staying
+/// independent of the epoch secret (the locating receiver holds only the
+/// hidden password; the binary supplies the binding string).
+pub const OFFSET_DOMAIN: &[u8] = b"mosseal/v2/offset";
+
+/// Argon2id for the deniable hidden-envelope offset (spec 09): 32 bytes from
+/// `binding ‖ SEP ‖ OFFSET_DOMAIN ‖ SEP ‖ hidden_password` over the cover
+/// salt. `arg[0..4]` drives the envelope offset; `arg[4..8]` masks the length
+/// prefix (see `seal::seal_deniable`).
+pub fn derive_argon2_offset(
+    binding_str: &[u8],
+    hidden_password: &[u8],
+    cover_salt: &[u8; 16],
+    profile: Argon2Profile,
+) -> Result<[u8; 32], String> {
+    let key = derive_argon2(
+        OFFSET_DOMAIN,
+        hidden_password,
+        cover_salt,
+        binding_str,
+        profile,
+    )?;
+    Ok(key.0)
+}
+
 /// HKDF-SHA256 default path.
 pub fn derive_hkdf(internal_secret: &[u8], salt: &[u8; 16], binding_str: &[u8]) -> DerivedKey {
     let hk = Hkdf::<Sha256>::new(Some(salt), internal_secret);
@@ -153,6 +188,33 @@ mod tests {
     fn debug_never_leaks_key() {
         let k = derive_hkdf(b"secret", &[1; 16], b"info");
         assert_eq!(format!("{k:?}"), "DerivedKey(..)");
+    }
+
+    #[test]
+    fn key_commit_is_key_sensitive_and_stable() {
+        let k1 = derive_hkdf(b"secret", &[1; 16], b"info");
+        let k2 = derive_hkdf(b"secret", &[1; 16], b"info");
+        let k3 = derive_hkdf(b"other", &[1; 16], b"info");
+        assert_eq!(key_commit(&k1), key_commit(&k2));
+        assert_ne!(key_commit(&k1), key_commit(&k3));
+        // Delegates to the envelope-module canonical construction.
+        assert_eq!(key_commit(&k1), crate::envelope::key_commit::build(&k1.0));
+    }
+
+    #[test]
+    fn offset_derive_is_password_and_salt_sensitive() {
+        let b = b"mosseal/v1\x1Fa.test,b.test";
+        let p = Argon2Profile::Minimum;
+        let a1 = derive_argon2_offset(b, b"hidden-pw", &[0x21; 16], p).unwrap();
+        let a2 = derive_argon2_offset(b, b"hidden-pw", &[0x21; 16], p).unwrap();
+        let a3 = derive_argon2_offset(b, b"other-pw", &[0x21; 16], p).unwrap();
+        let a4 = derive_argon2_offset(b, b"hidden-pw", &[0x22; 16], p).unwrap();
+        assert_eq!(a1, a2, "deterministic");
+        assert_ne!(a1, a3, "password drives the offset");
+        assert_ne!(a1, a4, "cover salt drives the offset");
+        // Domain-separated from an envelope key derive with the same inputs.
+        let env_key = derive_argon2(b"secret", b"hidden-pw", &[0x21; 16], b, p).unwrap();
+        assert_ne!(a1, env_key.0);
     }
 
     #[test]

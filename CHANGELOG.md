@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 with the envelope-format caveat described in [`docs/versioning.md`](docs/versioning.md).
 
+## [0.3.0] - 2026-10-19
+
+### Added
+
+- **Envelope v2: key commitment** (spec 01/02) — v2 plaintexts are prefixed with
+  `SHA-256("mosseal/v2" ‖ key)[..16]`, verified before payload parsing. This closes the
+  AES-GCM partitioning/forgery hole where a crafted ciphertext could decrypt to different
+  valid plaintexts under different keys. Cost: +16 bytes per v2 link. Seals always emit
+  v2; **every v1 link keeps opening** through the same pipeline (v1 vectors are pinned and
+  byte-identical — the drift tripwire doubles as the compat proof).
+- **Multi-secret links (`MULTI` kind `0x03`, spec 01)** — one link carrying N secrets
+  under N independent passwords. Each slot runs its own Argon2id over its own fresh
+  salt/nonce (never one derive sliced into N keys), binds its position into its GCM tag
+  (AAD), and enforces its own expiry. Open tries slots in order; all failing yields
+  `BAD_PASSWORD` with no oracle about which slot almost matched. Slot cap 4 by default,
+  8 via the compile-time `MOSSEAL_MULTI_MAX_SLOTS=8` flag. New seal-time error code
+  `TOO_MANY_SLOTS` (additive; minor per docs/versioning.md).
+- **Deniable links (spec 09)** — a normal v2 cover link hiding a complete hidden envelope
+  at a password-derived offset, padded to fixed size classes (1/2/4 KiB) so links in a
+  class are byte-length-identical. Two selectable cover modes: `cover=hidden`
+  (password-keyed cover; hidden receiver needs both passwords — VeraCrypt model) and
+  `cover=plain` (password-less cover; hidden receiver needs only the hidden password).
+  Hidden layers can be a single secret or a `MULTI`. Hidden access is explicit-only
+  (`openHidden`); wrong hidden password and absent layer are indistinguishable by design.
+- **wasm surface** (spec 02) — `sealMulti(slots, expSecs)`, `sealDeniable(cover, hidden,
+  sizeClass)`, `openHidden(link, coverPassword, hiddenPassword)`; the open-result JS shape
+  is unchanged (no `version` field serialized — the CLI is the only surface that prints
+  it).
+- **TS wrapper (`@mosseal/core`, spec 04)** — `sealFragment({ slots })` routes to
+  `sealMulti`; `sealDeniableFragment` / `generateDeniableShareUrl`;
+  `openHiddenFragment`; `TooManySlots` error code. `openFragment`/`openFromUrl` untouched.
+- **CLI (native + TS admin, spec 05)** — `seal-multi` (`--slot pw=secret` repeats or
+  `--slots-file` JSON), `seal-deniable` (`--cover-mode`, `--cover-password`,
+  `--cover-decoy`, `--hidden-slot`/`--hidden-slots-file`, `--hidden-password`,
+  `--size-class`), and `open --hidden-password` for the deniable path. `open` now prints a
+  `version:` line (the only version exposure, decision D9). Both admin surfaces stay
+  byte- and stdout-identical.
+- **Vectors & fuzzing (spec 08)** — v2 roundtrips, a commitment-tamper forge vector,
+  multi/deniable roundtrips with deterministic padding seeds, hidden-open error vectors,
+  and the `TOO_MANY_SLOTS` seal vector. New nightly fuzz target `hidden_extract`
+  (arbitrary fragments + passwords → no panic, taxonomy-only); the stable fuzz-smoke
+  corpus now covers v2 envelopes, multi blobs, deniable covers, and hostile masked
+  lengths.
+
+### Changed
+
+- **KDF constructions are unchanged in v2**: HKDF / Argon2id are reused
+  verbatim; password-less v2 links remain binary-readable exactly as v1's (migrate via
+  epoch rotation).
+
 ## [0.2.3] - 2026-10-01
 
 ### Changed

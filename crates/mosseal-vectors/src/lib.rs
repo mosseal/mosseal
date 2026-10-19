@@ -11,8 +11,11 @@
 use mosseal_core::{
     binding,
     epoch::EpochRegistry,
-    kdf::Argon2Profile,
-    seal::{SealContext, SealInput},
+    kdf::{self, Argon2Profile},
+    seal::{
+        CoverDecoy, CoverMode, DeniableSealInput, HiddenSpec, MultiSealInput, MultiSlot,
+        SealContext, SealInput,
+    },
     time::{FetchTimes, TimeMode, TimeSource},
 };
 use serde_json::{json, Value};
@@ -71,6 +74,8 @@ struct Roundtrip {
     salt: [u8; 16],
     nonce: [u8; 12],
     epoch: Option<u8>,
+    /// Envelope version pin (1 = legacy regression vectors, 2 = v2 vectors).
+    version: u8,
     /// Mocked net time for open; `None` = no fetch (exp=0 path).
     open_time: Option<f64>,
 }
@@ -84,6 +89,7 @@ fn seal_input(v: &Roundtrip) -> SealInput {
         deterministic_salt: Some(v.salt),
         deterministic_nonce: Some(v.nonce),
         deterministic_epoch: v.epoch,
+        deterministic_version: Some(v.version),
     }
 }
 
@@ -110,6 +116,7 @@ fn roundtrip_vector(c: &SealContext, v: &Roundtrip) -> Value {
             "salt": hex::encode(v.salt),
             "nonce": hex::encode(v.nonce),
             "epoch": v.epoch,
+            "version": v.version,
         },
         "expectFragment": fragment,
         "expectOpen": {
@@ -137,6 +144,22 @@ fn open_error_vector(
     })
 }
 
+/// A deniable open-error vector: a fragment plus cover/hidden passwords that
+/// must yield a code through the hidden-open path.
+fn open_hidden_error_vector(
+    name: &str,
+    fragment: &str,
+    cover_password: Option<&'static str>,
+    hidden_password: &str,
+) -> Value {
+    json!({
+        "name": name,
+        "type": "open-hidden-error",
+        "open": { "fragment": fragment, "coverPassword": cover_password, "hiddenPassword": hidden_password },
+        "expectError": "BAD_PASSWORD",
+    })
+}
+
 /// A seal-error vector: inputs that must fail at seal time.
 fn seal_error_vector(name: &'static str, data_len: usize, expect: &'static str) -> Value {
     json!({
@@ -145,6 +168,205 @@ fn seal_error_vector(name: &'static str, data_len: usize, expect: &'static str) 
         "input": { "dataLen": data_len, "kind": 1, "expSecs": null, "password": null },
         "expectError": expect,
     })
+}
+
+/// A multi-slot roundtrip vector: seal_multi deterministically, open with a
+/// designated slot password, and record both (spec 08 § multi).
+fn multi_roundtrip_vector(c: &SealContext, v: &MultiVector) -> Value {
+    let input = MultiSealInput {
+        slots: v
+            .slots
+            .iter()
+            .map(|s| MultiSlot {
+                password: s.0.as_bytes().to_vec(),
+                data: s.1.as_bytes().to_vec(),
+                kind: s.2,
+                exp: s.3,
+            })
+            .collect(),
+        deterministic_slot_salts: Some(v.slot_salts.to_vec()),
+        deterministic_slot_nonces: Some(v.slot_nonces.to_vec()),
+        deterministic_salt: Some(v.salt),
+        deterministic_nonce: Some(v.nonce),
+        deterministic_epoch: v.epoch,
+    };
+    let fragment = c.seal_multi(&input).expect("seal multi vector");
+    let open_pw = v.slots[v.open_slot_index].0.as_bytes();
+    // Per-slot expiry is enforced with the mocked vector clock (spec 08).
+    let out = c
+        .open(&fragment, Some(open_pw), &FixedFetch(NOW))
+        .expect("open multi vector");
+    json!({
+        "name": v.name,
+        "type": "multi-roundtrip",
+        "input": {
+            "slots": v.slots.iter().map(|s| json!({
+                "password": s.0,
+                "data": s.1,
+                "kind": s.2,
+                "expSecs": s.3,
+            })).collect::<Vec<_>>(),
+        },
+        "deterministic": {
+            "slotSalts": v.slot_salts.iter().map(hex::encode).collect::<Vec<_>>(),
+            "slotNonces": v.slot_nonces.iter().map(hex::encode).collect::<Vec<_>>(),
+            "salt": hex::encode(v.salt),
+            "nonce": hex::encode(v.nonce),
+            "epoch": v.epoch,
+        },
+        "expectFragment": fragment,
+        "openWithTime": NOW,
+        "expectOpen": {
+            "password": v.slots[v.open_slot_index].0,
+            "data": String::from_utf8_lossy(&out.data),
+            "exp": out.exp,
+            "kind": out.kind,
+        },
+    })
+}
+
+struct MultiVector {
+    name: &'static str,
+    /// (password, data, kind, exp) per slot.
+    slots: &'static [(&'static str, &'static str, u8, Option<u64>)],
+    slot_salts: &'static [[u8; 16]],
+    slot_nonces: &'static [[u8; 12]],
+    salt: [u8; 16],
+    nonce: [u8; 12],
+    epoch: Option<u8>,
+    open_slot_index: usize,
+}
+
+/// A deniable roundtrip vector: seal_deniable deterministically (padding
+/// seed), open the hidden layer, and record both (spec 08 § deniable).
+fn deniable_roundtrip_vector(c: &SealContext, v: &DeniableVector) -> Value {
+    let input = DeniableSealInput {
+        cover_mode: v.cover_mode,
+        cover_password: v.cover_password.map(|p| p.as_bytes().to_vec()),
+        cover_decoy: match v.decoy {
+            Some(d) => CoverDecoy::User(d.as_bytes().to_vec()),
+            None => CoverDecoy::Random,
+        },
+        hidden_password: v.hidden_password.as_bytes().to_vec(),
+        hidden: HiddenSpec::Single {
+            data: v.hidden_data.as_bytes().to_vec(),
+            kind: v.hidden_kind,
+            exp: v.hidden_exp,
+            deterministic_salt: Some(v.hidden_salt),
+            deterministic_nonce: Some(v.hidden_nonce),
+            deterministic_epoch: None,
+        },
+        size_class: Some(v.size_class),
+        deterministic_salt: Some(v.salt),
+        deterministic_nonce: Some(v.nonce),
+        deterministic_padding: Some(v.padding_seed),
+        deterministic_epoch: None,
+    };
+    let fragment = c.seal_deniable(&input).expect("seal deniable vector");
+    let out = c
+        .open_deniable(
+            &fragment,
+            v.cover_password.map(str::as_bytes),
+            Some(v.hidden_password.as_bytes()),
+            &NoFetch,
+        )
+        .expect("open deniable vector");
+    json!({
+        "name": v.name,
+        "type": "deniable-roundtrip",
+        "input": {
+            "cover": {
+                "mode": match v.cover_mode { CoverMode::Hidden => "hidden", CoverMode::Plain => "plain" },
+                "password": v.cover_password,
+                "decoy": v.decoy,
+            },
+            "hiddenPassword": v.hidden_password,
+            "hidden": {
+                "data": v.hidden_data,
+                "kind": v.hidden_kind,
+                "expSecs": v.hidden_exp,
+            },
+            "sizeClass": match v.size_class {
+                mosseal_core::seal::SizeClass::Kib1 => 1,
+                mosseal_core::seal::SizeClass::Kib2 => 2,
+                mosseal_core::seal::SizeClass::Kib4 => 4,
+            },
+        },
+        "deterministic": {
+            "salt": hex::encode(v.salt),
+            "nonce": hex::encode(v.nonce),
+            "paddingSeed": hex::encode(v.padding_seed),
+            "hiddenSalt": hex::encode(v.hidden_salt),
+            "hiddenNonce": hex::encode(v.hidden_nonce),
+        },
+        "expectFragment": fragment,
+        "expectOpen": {
+            "coverPassword": v.cover_password,
+            "data": String::from_utf8_lossy(&out.data),
+            "exp": out.exp,
+            "kind": out.kind,
+        },
+    })
+}
+
+struct DeniableVector {
+    name: &'static str,
+    cover_mode: CoverMode,
+    cover_password: Option<&'static str>,
+    decoy: Option<&'static str>,
+    hidden_password: &'static str,
+    hidden_data: &'static str,
+    hidden_kind: u8,
+    hidden_exp: Option<u64>,
+    size_class: mosseal_core::seal::SizeClass,
+    salt: [u8; 16],
+    nonce: [u8; 12],
+    padding_seed: [u8; 32],
+    hidden_salt: [u8; 16],
+    hidden_nonce: [u8; 12],
+}
+
+/// Forge a v2 envelope whose AEAD is valid (encrypted under the true epoch
+/// key with the correct AAD) but whose plaintext omits the key-commitment
+/// prefix — the partitioning/forgery shape the commitment closes (spec 08).
+fn forge_uncommitted_v2(c: &SealContext, salt: [u8; 16], nonce: [u8; 12]) -> String {
+    use aes_gcm::{
+        aead::{Aead, KeyInit, Payload as GcmPayload},
+        Aes256Gcm,
+    };
+    use mosseal_core::envelope::{self, Envelope, Payload};
+    let epoch = c.epochs.latest_epoch().unwrap();
+    let b = mosseal_core::binding::binding_string(&c.whitelist);
+    let secret = c.epochs.secret(epoch).unwrap();
+    let key = kdf::derive_hkdf(secret, &salt, &b);
+    let header = Envelope {
+        version: 2,
+        flags: 0,
+        key_epoch: epoch,
+        salt,
+        nonce,
+        ciphertext: Vec::new(),
+    };
+    let payload = Payload {
+        kind: mosseal_core::envelope::kind::TOKEN,
+        exp: 0,
+        data: b"tok_abc123".to_vec(),
+    }
+    .encode()
+    .unwrap();
+    let cipher = Aes256Gcm::new((&key.0).into());
+    let ct = cipher
+        .encrypt(
+            &nonce.into(),
+            GcmPayload {
+                msg: &payload,
+                aad: &header.aad(),
+            },
+        )
+        .unwrap();
+    let mut env = header;
+    env.ciphertext = ct;
+    envelope::b64::encode(&envelope::encode(&env))
 }
 
 /// Build the full vector set (spec 08: every KDF path, flag combo, error code).
@@ -161,6 +383,7 @@ pub fn build() -> Value {
             salt: [0x01; 16],
             nonce: [0x02; 12],
             epoch: None,
+            version: 1,
             open_time: None,
         },
         Roundtrip {
@@ -172,6 +395,7 @@ pub fn build() -> Value {
             salt: [0x03; 16],
             nonce: [0x04; 12],
             epoch: None,
+            version: 1,
             open_time: Some(NOW),
         },
         Roundtrip {
@@ -183,6 +407,7 @@ pub fn build() -> Value {
             salt: [0x05; 16],
             nonce: [0x06; 12],
             epoch: None,
+            version: 1,
             open_time: None,
         },
         Roundtrip {
@@ -194,6 +419,7 @@ pub fn build() -> Value {
             salt: [0x07; 16],
             nonce: [0x08; 12],
             epoch: None,
+            version: 1,
             open_time: Some(NOW),
         },
         Roundtrip {
@@ -205,6 +431,7 @@ pub fn build() -> Value {
             salt: [0x09; 16],
             nonce: [0x0a; 12],
             epoch: None,
+            version: 1,
             open_time: None,
         },
         Roundtrip {
@@ -216,6 +443,7 @@ pub fn build() -> Value {
             salt: [0x0b; 16],
             nonce: [0x0c; 12],
             epoch: Some(2),
+            version: 1,
             open_time: None,
         },
         Roundtrip {
@@ -227,6 +455,7 @@ pub fn build() -> Value {
             salt: [0x0d; 16],
             nonce: [0x0e; 12],
             epoch: None,
+            version: 1,
             open_time: None,
         },
         Roundtrip {
@@ -238,6 +467,68 @@ pub fn build() -> Value {
             salt: [0x0f; 16],
             nonce: [0x10; 12],
             epoch: None,
+            version: 1,
+            open_time: None,
+        },
+        // --- v2 single roundtrips (key-commitment prefix, current seals) ---
+        Roundtrip {
+            name: "v2-token-nopass-exp0",
+            data: "tok_abc123",
+            kind: 1,
+            exp: None,
+            password: None,
+            salt: [0x15; 16],
+            nonce: [0x16; 12],
+            epoch: None,
+            version: 2,
+            open_time: None,
+        },
+        Roundtrip {
+            name: "v2-token-password-exp0",
+            data: "tok_abc123",
+            kind: 1,
+            exp: None,
+            password: Some("hunter2"),
+            salt: [0x17; 16],
+            nonce: [0x18; 12],
+            epoch: None,
+            version: 2,
+            open_time: None,
+        },
+        Roundtrip {
+            name: "v2-token-nopass-exp3600",
+            data: "tok_abc123",
+            kind: 1,
+            exp: Some(NOW as u64 + 3600),
+            password: None,
+            salt: [0x19; 16],
+            nonce: [0x1a; 12],
+            epoch: None,
+            version: 2,
+            open_time: Some(NOW),
+        },
+        Roundtrip {
+            name: "v2-epoch2-nopass-exp0",
+            data: "tok_epoch2",
+            kind: 1,
+            exp: None,
+            password: None,
+            salt: [0x1b; 16],
+            nonce: [0x1c; 12],
+            epoch: Some(2),
+            version: 2,
+            open_time: None,
+        },
+        Roundtrip {
+            name: "v2-binaryblob-nopass-exp0",
+            data: "state-blob",
+            kind: 2,
+            exp: None,
+            password: None,
+            salt: [0x1d; 16],
+            nonce: [0x1e; 12],
+            epoch: None,
+            version: 2,
             open_time: None,
         },
     ];
@@ -274,6 +565,7 @@ pub fn build() -> Value {
         salt: [0x11; 16],
         nonce: [0x12; 12],
         epoch: None,
+        version: 1,
         open_time: None,
     };
     let expired_frag = c.seal(&seal_input(&expired)).unwrap();
@@ -303,10 +595,11 @@ pub fn build() -> Value {
         "MALFORMED_ENVELOPE",
     ));
 
-    // UNSUPPORTED_VERSION: bump the version byte of a valid envelope.
+    // UNSUPPORTED_VERSION: bump the version byte of a valid envelope beyond
+    // both openable versions (v1 and v2).
     let base = c.seal(&seal_input(&roundtrips[0])).unwrap();
     let mut bytes = mosseal_core::envelope::b64::decode(&base).unwrap();
-    bytes[0] = 0x02;
+    bytes[0] = 0x03;
     vectors.push(open_error_vector(
         "unsupported-version",
         b64(&bytes),
@@ -360,6 +653,7 @@ pub fn build() -> Value {
         salt: [0x13; 16],
         nonce: [0x14; 12],
         epoch: None,
+        version: 1,
         open_time: None,
     };
     let unknown_frag = c.seal(&seal_input(&unknown_kind)).unwrap();
@@ -377,6 +671,102 @@ pub fn build() -> Value {
         mosseal_core::MAX_PAYLOAD_BYTES + 1,
         "PAYLOAD_TOO_LARGE",
     ));
+
+    // --- v2 error vectors ---
+
+    // Commitment tamper (spec 08): a v2 envelope whose AEAD is valid but
+    // whose plaintext omits the key-commitment prefix must be rejected.
+    let forged = forge_uncommitted_v2(&c, [0x25; 16], [0x26; 12]);
+    vectors.push(open_error_vector(
+        "v2-commitment-missing",
+        forged,
+        None,
+        None,
+        "MALFORMED_ENVELOPE",
+    ));
+
+    // --- MULTI vectors (spec 08 § multi) ---
+
+    let multi = MultiVector {
+        name: "multi-2slot",
+        slots: &[
+            ("pw-one", "secret_one", 1, None),
+            ("pw-two", "secret_two", 2, Some(NOW as u64 + 3600)),
+        ],
+        slot_salts: &[[0xD1; 16], [0xD2; 16]],
+        slot_nonces: &[[0xE1; 12], [0xE2; 12]],
+        salt: [0xF1; 16],
+        nonce: [0xF2; 12],
+        epoch: None,
+        open_slot_index: 1,
+    };
+    let multi_json = multi_roundtrip_vector(&c, &multi);
+    let multi_frag = multi_json["expectFragment"].as_str().unwrap().to_string();
+    vectors.push(multi_json);
+    // Wrong password across all slots.
+    vectors.push(open_error_vector(
+        "multi-wrong-password",
+        multi_frag,
+        Some("WRONG"),
+        None,
+        "BAD_PASSWORD",
+    ));
+    // Seal-time slot cap (default build: MAX_SLOTS = 4).
+    vectors.push(json!({
+        "name": "multi-too-many-slots",
+        "type": "seal-multi-error",
+        "input": { "slots": mosseal_core::envelope::multi::MAX_SLOTS + 1 },
+        "expectError": "TOO_MANY_SLOTS",
+    }));
+
+    // --- Deniable vectors (spec 08 § deniable, both cover modes) ---
+
+    let deniable_vectors = [
+        DeniableVector {
+            name: "deniable-plain-single",
+            cover_mode: CoverMode::Plain,
+            cover_password: None,
+            decoy: Some("plausible decoy bytes "),
+            hidden_password: "hidden-hunter",
+            hidden_data: "hidden_secret_123",
+            hidden_kind: 1,
+            hidden_exp: None,
+            size_class: mosseal_core::seal::SizeClass::Kib1,
+            salt: [0x35; 16],
+            nonce: [0x36; 12],
+            padding_seed: [0x37; 32],
+            hidden_salt: [0x38; 16],
+            hidden_nonce: [0x39; 12],
+        },
+        DeniableVector {
+            name: "deniable-hidden-cover-single",
+            cover_mode: CoverMode::Hidden,
+            cover_password: Some("cover-hunter"),
+            decoy: None,
+            hidden_password: "hidden-hunter",
+            hidden_data: "hidden_secret_456",
+            hidden_kind: 1,
+            hidden_exp: None,
+            size_class: mosseal_core::seal::SizeClass::Kib1,
+            salt: [0x45; 16],
+            nonce: [0x46; 12],
+            padding_seed: [0x47; 32],
+            hidden_salt: [0x48; 16],
+            hidden_nonce: [0x49; 12],
+        },
+    ];
+    for v in &deniable_vectors {
+        let json = deniable_roundtrip_vector(&c, v);
+        let frag = json["expectFragment"].as_str().unwrap().to_string();
+        vectors.push(json);
+        // Wrong hidden password (either cover mode): recovery fails closed.
+        vectors.push(open_hidden_error_vector(
+            &format!("{}-wrong-hidden-password", v.name),
+            &frag,
+            v.cover_password,
+            "WRONG",
+        ));
+    }
 
     json!({
         "formatVersion": 1,
@@ -450,12 +840,233 @@ mod tests {
             "BAD_PASSWORD",
             "EXPIRED",
             "EPOCH_RETIRED",
+            "TOO_MANY_SLOTS",
         ] {
             assert!(codes.contains(&code), "missing error vector for {code}");
         }
+        // TOO_MANY_SLOTS arrives via the seal-multi-error vector type.
+        let types: Vec<&str> = v["vectors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|x| x["type"].as_str())
+            .collect();
+        assert!(types.contains(&"seal-multi-error"));
+        assert!(types.contains(&"multi-roundtrip"));
+        assert!(types.contains(&"deniable-roundtrip"));
+        assert!(types.contains(&"open-hidden-error"));
         // STRICT_TIME_UNAVAILABLE and DOMAIN_MISMATCH are covered elsewhere
         // (native unit/integration tests + the browser suite) — they are not
         // reachable through this vector harness (lenient mode, no host gate).
+    }
+
+    /// Cross-compat proof: every v1 vector's recorded fragment still opens
+    /// through the v2-capable code (spec 08 § v1 read path).
+    #[test]
+    fn v1_fragments_open_on_v2() {
+        let c = ctx();
+        let v = build();
+        for vec in v["vectors"].as_array().unwrap() {
+            if vec["type"] != "roundtrip" {
+                continue;
+            }
+            let version = vec["deterministic"]["version"].as_u64().unwrap();
+            if version != 1 {
+                continue;
+            }
+            // Loop-invariant: type is "roundtrip" (filtered above) and the
+            // vector needs no mocked clock at open.
+            if vec["openWithTime"].is_null() {
+                let fragment = vec["expectFragment"].as_str().unwrap();
+                let password = vec["input"]["password"].as_str().map(str::as_bytes);
+                let out = c
+                    .open(fragment, password, &NoFetch)
+                    .unwrap_or_else(|e| panic!("v1 vector {} failed: {e}", vec["name"]));
+                assert_eq!(out.version, 1, "v1 opens report version 1");
+            }
+        }
+    }
+
+    /// Multi vectors reproduce byte-exactly from their deterministic inputs
+    /// and reopen to the designated slot's output.
+    #[test]
+    fn multi_vectors_reproduce_and_reopen() {
+        let c = ctx();
+        let v = build();
+        for vec in v["vectors"].as_array().unwrap() {
+            if vec["type"] != "multi-roundtrip" {
+                continue;
+            }
+            // Re-seal from the recorded deterministic inputs.
+            let slots: Vec<MultiSlot> = vec["input"]["slots"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| MultiSlot {
+                    password: s["password"].as_str().unwrap().as_bytes().to_vec(),
+                    data: s["data"].as_str().unwrap().as_bytes().to_vec(),
+                    kind: s["kind"].as_u64().unwrap() as u8,
+                    exp: s["expSecs"].as_u64(),
+                })
+                .collect();
+            let salts: Vec<[u8; 16]> = vec["deterministic"]["slotSalts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|h| {
+                    hex::decode(h.as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap()
+                })
+                .collect();
+            let nonces: Vec<[u8; 12]> = vec["deterministic"]["slotNonces"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|h| {
+                    hex::decode(h.as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap()
+                })
+                .collect();
+            let input = MultiSealInput {
+                slots,
+                deterministic_slot_salts: Some(salts),
+                deterministic_slot_nonces: Some(nonces),
+                deterministic_salt: Some(
+                    hex::decode(vec["deterministic"]["salt"].as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                ),
+                deterministic_nonce: Some(
+                    hex::decode(vec["deterministic"]["nonce"].as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                ),
+                deterministic_epoch: vec["deterministic"]["epoch"].as_u64().map(|e| e as u8),
+            };
+            let frag = c.seal_multi(&input).unwrap();
+            assert_eq!(
+                frag,
+                vec["expectFragment"].as_str().unwrap(),
+                "multi vector {} drifted",
+                vec["name"]
+            );
+            // Reopen through the designated slot (mocked vector clock).
+            let pw = vec["expectOpen"]["password"].as_str().unwrap();
+            let now = vec["openWithTime"].as_f64().unwrap_or(NOW);
+            let out = c
+                .open(&frag, Some(pw.as_bytes()), &FixedFetch(now))
+                .unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&out.data),
+                vec["expectOpen"]["data"].as_str().unwrap()
+            );
+            assert_eq!(out.kind, vec["expectOpen"]["kind"].as_u64().unwrap() as u8);
+            assert_eq!(out.version, 2);
+        }
+    }
+
+    /// Deniable vectors reproduce byte-exactly from their deterministic
+    /// inputs (padding seed included) and reopen via the hidden path.
+    #[test]
+    fn deniable_vectors_reproduce_and_reopen() {
+        let c = ctx();
+        let v = build();
+        for vec in v["vectors"].as_array().unwrap() {
+            if vec["type"] != "deniable-roundtrip" {
+                continue;
+            }
+            let d = &vec["deterministic"];
+            let input = DeniableSealInput {
+                cover_mode: match vec["input"]["cover"]["mode"].as_str().unwrap() {
+                    "hidden" => CoverMode::Hidden,
+                    _ => CoverMode::Plain,
+                },
+                cover_password: vec["input"]["cover"]["password"]
+                    .as_str()
+                    .map(|p| p.as_bytes().to_vec()),
+                cover_decoy: match vec["input"]["cover"]["decoy"].as_str() {
+                    Some(d) => CoverDecoy::User(d.as_bytes().to_vec()),
+                    None => CoverDecoy::Random,
+                },
+                hidden_password: vec["input"]["hiddenPassword"]
+                    .as_str()
+                    .unwrap()
+                    .as_bytes()
+                    .to_vec(),
+                hidden: HiddenSpec::Single {
+                    data: vec["input"]["hidden"]["data"]
+                        .as_str()
+                        .unwrap()
+                        .as_bytes()
+                        .to_vec(),
+                    kind: vec["input"]["hidden"]["kind"].as_u64().unwrap() as u8,
+                    exp: vec["input"]["hidden"]["expSecs"].as_u64(),
+                    deterministic_salt: Some(
+                        hex::decode(d["hiddenSalt"].as_str().unwrap())
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                    ),
+                    deterministic_nonce: Some(
+                        hex::decode(d["hiddenNonce"].as_str().unwrap())
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                    ),
+                    deterministic_epoch: None,
+                },
+                size_class: Some(match vec["input"]["sizeClass"].as_u64().unwrap() {
+                    1 => mosseal_core::seal::SizeClass::Kib1,
+                    2 => mosseal_core::seal::SizeClass::Kib2,
+                    4 => mosseal_core::seal::SizeClass::Kib4,
+                    other => panic!("bad size class {other}"),
+                }),
+                deterministic_salt: Some(
+                    hex::decode(d["salt"].as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                ),
+                deterministic_nonce: Some(
+                    hex::decode(d["nonce"].as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                ),
+                deterministic_padding: Some(
+                    hex::decode(d["paddingSeed"].as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                ),
+                deterministic_epoch: None,
+            };
+            let frag = c.seal_deniable(&input).unwrap();
+            assert_eq!(
+                frag,
+                vec["expectFragment"].as_str().unwrap(),
+                "deniable vector {} drifted",
+                vec["name"]
+            );
+            // Hidden reopen matches the recorded output.
+            let cpw = vec["expectOpen"]["coverPassword"]
+                .as_str()
+                .map(str::as_bytes);
+            let hpw = vec["input"]["hiddenPassword"].as_str().unwrap();
+            let out = c
+                .open_deniable(&frag, cpw, Some(hpw.as_bytes()), &NoFetch)
+                .unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&out.data),
+                vec["expectOpen"]["data"].as_str().unwrap()
+            );
+        }
     }
 
     #[test]
@@ -485,6 +1096,7 @@ mod tests {
                 deterministic_salt: Some(salt),
                 deterministic_nonce: Some(nonce),
                 deterministic_epoch: vec["deterministic"]["epoch"].as_u64().map(|e| e as u8),
+                deterministic_version: vec["deterministic"]["version"].as_u64().map(|v| v as u8),
             };
             let frag = c.seal(&input).unwrap();
             assert_eq!(

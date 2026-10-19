@@ -16,6 +16,8 @@ wasm-bindgen.workspace = true
 js-sys.workspace = true
 serde.workspace = true
 serde-wasm-bindgen.workspace = true
+# sealMulti / sealDeniable JSON inputs (spec 05 § admin surface)
+serde_json.workspace = true
 console_error_panic_hook.workspace = true
 
 # wasm32 randomness feature activation.

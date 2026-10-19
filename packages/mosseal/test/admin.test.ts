@@ -63,6 +63,266 @@ describe("gen-secret", () => {
   });
 });
 
+describe("v2 admin surface (multi + deniable)", () => {
+  it("open prints the version line (D9: CLI-only exposure)", async () => {
+    const s = secret(3);
+    await run(["seal", "tok_v2", "--epochs", s, "--domains", "a.test"]);
+    const frag = logged().trim();
+    logSpy.mockClear();
+    await run(["open", frag, "--epochs", s, "--domains", "a.test"]);
+    expect(logged()).toMatch(/version: 2/);
+    expect(logged()).toMatch(/data: tok_v2/);
+  });
+
+  it("seal-multi round-trips each slot and rejects wrong passwords", async () => {
+    const s = secret(4);
+    await run([
+      "seal-multi",
+      "--slot",
+      "pw-one=secret_one",
+      "--slot",
+      "pw-two=secret_two",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    const frag = logged().trim();
+    expect(frag).toMatch(/^[A-Za-z0-9_-]+$/);
+
+    logSpy.mockClear();
+    await run(["open", frag, "--password", "pw-two", "--epochs", s, "--domains", "a.test"]);
+    expect(logged()).toMatch(/data: secret_two/);
+    expect(logged()).toMatch(/version: 2/);
+
+    await expect(
+      run(["open", frag, "--password", "WRONG", "--epochs", s, "--domains", "a.test"])
+    ).rejects.toThrow(/BAD_PASSWORD/);
+  });
+
+  it("seal-deniable hides and recovers a hidden layer (plain cover)", async () => {
+    const s = secret(5);
+    await run([
+      "seal-deniable",
+      "--cover-mode",
+      "plain",
+      "--hidden-slot",
+      "hpw=hidden_secret",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    const frag = logged().trim();
+    // 1 KiB size class → a long fragment (padded), unlike single links.
+    expect(frag.length).toBeGreaterThan(1000);
+
+    logSpy.mockClear();
+    await run([
+      "open",
+      frag,
+      "--hidden-password",
+      "hpw",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    expect(logged()).toMatch(/data: hidden_secret/);
+    expect(logged()).toMatch(/version: 2/);
+
+    // A normal open shows only the opaque cover blob — no secret leak.
+    logSpy.mockClear();
+    await run(["open", frag, "--epochs", s, "--domains", "a.test"]);
+    expect(logged()).toMatch(/kind: 2/);
+    expect(logged()).not.toMatch(/hidden_secret/);
+
+    await expect(
+      run([
+        "open",
+        frag,
+        "--hidden-password",
+        "WRONG",
+        "--epochs",
+        s,
+        "--domains",
+        "a.test",
+      ])
+    ).rejects.toThrow(/BAD_PASSWORD/);
+  });
+
+  it("seal-deniable hidden cover requires the cover password to open", async () => {
+    const s = secret(6);
+    await run([
+      "seal-deniable",
+      "--cover-password",
+      "cover-pw",
+      "--hidden-slot",
+      "hpw=hidden_secret",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    const frag = logged().trim();
+
+    await expect(
+      run([
+        "open",
+        frag,
+        "--hidden-password",
+        "hpw",
+        "--epochs",
+        s,
+        "--domains",
+        "a.test",
+      ])
+    ).rejects.toThrow(/BAD_PASSWORD/);
+
+    logSpy.mockClear();
+    await run([
+      "open",
+      frag,
+      "--password",
+      "cover-pw",
+      "--hidden-password",
+      "hpw",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    expect(logged()).toMatch(/data: hidden_secret/);
+  });
+
+  it("parseSlotArg splits on the first equals, validates, and never echoes credentials", async () => {
+    const { parseSlotArg } = await import("../src/admin.js");
+    expect(parseSlotArg("pw=secret=with=equals")).toEqual({
+      password: "pw",
+      data: "secret=with=equals",
+    });
+    for (const bad of ["no-equals", "=empty", "hunter2:secret"]) {
+      let message = "";
+      try {
+        parseSlotArg(bad);
+      } catch (e) {
+        message = String(e);
+      }
+      expect(message).toMatch(/PASSWORD=SECRET/);
+      // The raw argument contains credentials; it must not reach the error.
+      expect(message).not.toContain(bad);
+      expect(message).not.toContain("hunter2");
+    }
+  });
+
+  it("seal-multi honors slots-file kind and expSecs (native parity)", async () => {
+    const s = secret(7);
+    const dir = makeTmp();
+    const slotsFile = join(dir, "slots.json");
+    writeFileSync(
+      slotsFile,
+      JSON.stringify([
+        { password: "pw1", data: "secret_one" },
+        { password: "pw2", data: "secret_two", kind: "binary-blob", expSecs: 4102444800 },
+      ])
+    );
+    await run([
+      "seal-multi",
+      "--slots-file",
+      slotsFile,
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    const frag = logged().trim();
+
+    // String kind + expSecs ride through: slot 2 opens as kind 2 with exp.
+    logSpy.mockClear();
+    await run([
+      "open",
+      frag,
+      "--password",
+      "pw2",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    expect(logged()).toMatch(/kind: 2/);
+    expect(logged()).toMatch(/exp: {2}4102444800/);
+
+    // Numeric kind form is accepted too (shared slots-file schema).
+    writeFileSync(
+      slotsFile,
+      JSON.stringify([{ password: "pw3", data: "secret_three", kind: 2 }])
+    );
+    logSpy.mockClear();
+    await run([
+      "seal-multi",
+      "--slots-file",
+      slotsFile,
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    const frag2 = logged().trim();
+    logSpy.mockClear();
+    await run([
+      "open",
+      frag2,
+      "--password",
+      "pw3",
+      "--epochs",
+      s,
+      "--domains",
+      "a.test",
+    ]);
+    expect(logged()).toMatch(/kind: 2/);
+  });
+
+  it("seal-deniable rejects --slot instead of silently dropping it", async () => {
+    const s = secret(8);
+    await expect(
+      run([
+        "seal-deniable",
+        "--cover-mode",
+        "plain",
+        "--slot",
+        "lost=secret",
+        "--hidden-slot",
+        "hpw=hidden",
+        "--epochs",
+        s,
+        "--domains",
+        "a.test",
+      ])
+    ).rejects.toThrow(/--hidden-slot/);
+  });
+
+  it("seal-multi rejects fractional expSecs (cross-surface parity)", async () => {
+    const s = secret(9);
+    const dir = makeTmp();
+    const slotsFile = join(dir, "slots.json");
+    writeFileSync(
+      slotsFile,
+      JSON.stringify([{ password: "pw", data: "d", expSecs: 3600.5 }])
+    );
+    await expect(
+      run([
+        "seal-multi",
+        "--slots-file",
+        slotsFile,
+        "--epochs",
+        s,
+        "--domains",
+        "a.test",
+      ])
+    ).rejects.toThrow(/MALFORMED_ENVELOPE/);
+  });
+});
+
 describe("seal / open round-trip", () => {
   it("seals then opens a token via flags", async () => {
     const s = secret(7);

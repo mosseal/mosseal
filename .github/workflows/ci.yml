@@ -36,10 +36,11 @@ jobs:
             - name: vectors drift check
               run: cargo run -p mosseal-vectors -- --check
 
-    # Nightly `cargo fuzz` smoke (spec 08): 60 s each on the decode/open targets.
-    # The stable-toolchain counterpart (fuzz_smoke.rs) runs in `rust-native`;
-    # this job explores the same surface unbounded. `fuzz/` is a separate
-    # workspace root, excluded from the stable workspace.
+    # Nightly `cargo fuzz` smoke (spec 08): 60 s each on the decode/open and
+    # deniable hidden-recovery targets. The stable-toolchain counterpart
+    # (fuzz_smoke.rs) runs in `rust-native`; this job explores the same
+    # surface unbounded. `fuzz/` is a separate workspace root, excluded from
+    # the stable workspace.
     fuzz-smoke:
         name: fuzz-smoke
         runs-on: ubuntu-latest
@@ -64,6 +65,26 @@ jobs:
             - name: fuzz open (60 s)
               working-directory: fuzz
               run: cargo +nightly fuzz run open --target x86_64-unknown-linux-gnu -- -max_total_time=60
+            - name: fuzz hidden_extract (60 s)
+              working-directory: fuzz
+              run: cargo +nightly fuzz run hidden_extract --target x86_64-unknown-linux-gnu -- -max_total_time=60
+
+    # `MOSSEAL_MULTI_MAX_SLOTS=8` build (D7, spec 01 § MULTI kind): the slot
+    # cap is a compile-time const, so the opt-in 8-slot build needs its own
+    # compile + test leg. `option_env!` reads the variable at compile time
+    # (fresh CI runners have no cached artifacts, so the flag cannot be
+    # masked by incremental builds).
+    multi-max-slots:
+        name: multi-max-slots (8)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+            - name: multi tests with the 8-slot override
+              run: cargo test -p mosseal-core multi
+              env:
+                  MOSSEAL_MULTI_MAX_SLOTS: "8"
 
     # Version lockstep (spec 06, docs/versioning.md): the root Cargo.toml
     # `[workspace.package] version` is authoritative, and the two npm manifests

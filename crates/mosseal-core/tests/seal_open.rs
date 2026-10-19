@@ -64,6 +64,7 @@ fn input(kind_byte: u8, exp: Option<u64>, password: Option<&str>) -> SealInput {
         deterministic_salt: Some([0x01; 16]),
         deterministic_nonce: Some([0x02; 12]),
         deterministic_epoch: None,
+        deterministic_version: None,
     }
 }
 
@@ -75,11 +76,35 @@ const GOLDEN_TOKEN_NOPASS_EXP0: &str =
 #[test]
 fn golden_fragment_is_stable() {
     let c = ctx();
-    let frag = c.seal(&input(kind::TOKEN, None, None)).unwrap();
+    // Pin v1: the golden locks the v1 wire bytes (permanent read path);
+    // fresh seals are v2 (see `v2_golden_fragment_is_stable`).
+    let frag = c
+        .seal(&SealInput {
+            deterministic_version: Some(1),
+            ..input(kind::TOKEN, None, None)
+        })
+        .unwrap();
     assert_eq!(frag, GOLDEN_TOKEN_NOPASS_EXP0);
     // Sealed at the latest ACTIVE epoch (2), not the retired hole (1).
     let bytes = envelope::b64::decode(&frag).unwrap();
     assert_eq!(bytes[2], 2);
+}
+
+/// The exact v2 wire bytes for the same canonical sample: v1 golden + the
+/// 16-byte key commitment inside the AEAD plaintext (everything else pinned).
+const GOLDEN_V2_TOKEN_NOPASS: &str =
+    "AgACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgICFnn9lIKtPL0-FB66q4EE_En6kdvRK8vzbekB_ufQlldQFAH21ch9DyMDwSsJcZnl8J6o1Avz6g";
+
+#[test]
+fn v2_golden_fragment_is_stable() {
+    let c = ctx();
+    let frag = c.seal(&input(kind::TOKEN, None, None)).unwrap();
+    assert_eq!(frag, GOLDEN_V2_TOKEN_NOPASS, "v2 wire bytes drifted");
+    let bytes = envelope::b64::decode(&frag).unwrap();
+    assert_eq!(bytes[0], 2);
+    let out = c.open(&frag, None, &NoFetch).unwrap();
+    assert_eq!(out.data, b"tok_abc123");
+    assert_eq!(out.version, 2);
 }
 
 #[test]
@@ -192,9 +217,9 @@ fn error_taxonomy_is_reachable_via_public_api() {
         ErrorCode::MalformedEnvelope
     );
 
-    // UNSUPPORTED_VERSION — bump the version byte.
+    // UNSUPPORTED_VERSION — bump the version byte beyond v2.
     let mut bytes = envelope::b64::decode(&good).unwrap();
-    bytes[0] = 0x02;
+    bytes[0] = 0x03;
     assert_eq!(
         c.open(&envelope::b64::encode(&bytes), None, &NoFetch)
             .unwrap_err()

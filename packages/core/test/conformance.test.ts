@@ -24,16 +24,47 @@ interface RoundtripVector {
   name: string;
   type: "roundtrip";
   input: { data: string; kind: number; expSecs: number | null; password: string | null };
-  deterministic: { salt: string; nonce: string; epoch: number | null };
+  deterministic: { salt: string; nonce: string; epoch: number | null; version: number };
   expectFragment: string;
   expectOpen: { data: string; exp: number; kind: number };
   openWithTime: number | null;
+}
+
+interface MultiRoundtripVector {
+  name: string;
+  type: "multi-roundtrip";
+  input: {
+    slots: { password: string; data: string; kind: number; expSecs: number | null }[];
+  };
+  expectFragment: string;
+  openWithTime: number | null;
+  expectOpen: { password: string; data: string; exp: number; kind: number };
+}
+
+interface DeniableRoundtripVector {
+  name: string;
+  type: "deniable-roundtrip";
+  input: {
+    cover: { mode: "hidden" | "plain"; password: string | null; decoy: string | null };
+    hiddenPassword: string;
+    hidden: { data: string; kind: number; expSecs: number | null };
+    sizeClass: number;
+  };
+  expectFragment: string;
+  expectOpen: { coverPassword: string | null; data: string; exp: number; kind: number };
 }
 
 interface OpenErrorVector {
   name: string;
   type: "open-error";
   open: { fragment: string; password: string | null; nowSecs: number | null };
+  expectError: string;
+}
+
+interface OpenHiddenErrorVector {
+  name: string;
+  type: "open-hidden-error";
+  open: { fragment: string; coverPassword: string | null; hiddenPassword: string };
   expectError: string;
 }
 
@@ -44,7 +75,21 @@ interface SealErrorVector {
   expectError: string;
 }
 
-type Vector = RoundtripVector | OpenErrorVector | SealErrorVector;
+interface SealMultiErrorVector {
+  name: string;
+  type: "seal-multi-error";
+  input: { slots: number };
+  expectError: string;
+}
+
+type Vector =
+  | RoundtripVector
+  | MultiRoundtripVector
+  | DeniableRoundtripVector
+  | OpenErrorVector
+  | OpenHiddenErrorVector
+  | SealErrorVector
+  | SealMultiErrorVector;
 
 interface ConformanceMosseal {
   sealDeterministic(
@@ -54,9 +99,17 @@ interface ConformanceMosseal {
     kind: number | null,
     saltHex: string,
     nonceHex: string,
-    epoch?: number | null
+    epoch?: number | null,
+    version?: number | null
   ): string;
+  sealMulti(slots: unknown, expSecs: number | null): string;
+  sealDeniable(cover: unknown, hidden: unknown, sizeClass: number | null): string;
   open(link: string, password?: string | null): Promise<{ data: string; exp: number; kind: number }>;
+  openHidden(
+    link: string,
+    coverPassword: string | null,
+    hiddenPassword: string | null
+  ): Promise<{ data: string; exp: number; kind: number }>;
   openWithTime(
     link: string,
     password: string | null,
@@ -76,13 +129,29 @@ const vectors = VECTORS.vectors as Vector[];
 
 describe("conformance vectors (spec 08)", () => {
   const roundtrips = vectors.filter((v): v is RoundtripVector => v.type === "roundtrip");
+  const multiRoundtrips = vectors.filter(
+    (v): v is MultiRoundtripVector => v.type === "multi-roundtrip"
+  );
+  const deniableRoundtrips = vectors.filter(
+    (v): v is DeniableRoundtripVector => v.type === "deniable-roundtrip"
+  );
   const openErrors = vectors.filter((v): v is OpenErrorVector => v.type === "open-error");
+  const openHiddenErrors = vectors.filter(
+    (v): v is OpenHiddenErrorVector => v.type === "open-hidden-error"
+  );
   const sealErrors = vectors.filter((v): v is SealErrorVector => v.type === "seal-error");
+  const sealMultiErrors = vectors.filter(
+    (v): v is SealMultiErrorVector => v.type === "seal-multi-error"
+  );
 
   it("has vectors of every kind", () => {
     expect(roundtrips.length).toBeGreaterThan(0);
+    expect(multiRoundtrips.length).toBeGreaterThan(0);
+    expect(deniableRoundtrips.length).toBeGreaterThan(0);
     expect(openErrors.length).toBeGreaterThan(0);
+    expect(openHiddenErrors.length).toBeGreaterThan(0);
     expect(sealErrors.length).toBeGreaterThan(0);
+    expect(sealMultiErrors.length).toBeGreaterThan(0);
   });
 
   describe("seal reproduces native byte-exactly", () => {
@@ -95,7 +164,8 @@ describe("conformance vectors (spec 08)", () => {
           v.input.kind,
           v.deterministic.salt,
           v.deterministic.nonce,
-          v.deterministic.epoch
+          v.deterministic.epoch,
+          v.deterministic.version
         );
         expect(fragment).toBe(v.expectFragment);
       });
@@ -142,6 +212,104 @@ describe("conformance vectors (spec 08)", () => {
             null
           )
         ).toThrow(v.expectError);
+      });
+    }
+  });
+
+  describe("multi vectors: open matches native output", () => {
+    for (const v of multiRoundtrips) {
+      it(v.name, async () => {
+        // Open the native-recorded fragment through the wasm multi path
+        // (receiver-side conformance; seal reproduction is native-gated).
+        // Slot expiry is checked against the recorded vector clock.
+        const out =
+          v.openWithTime === null
+            ? await wasm.open(v.expectFragment, v.expectOpen.password)
+            : await wasm.openWithTime(v.expectFragment, v.expectOpen.password, v.openWithTime);
+        expect(out.data).toBe(v.expectOpen.data);
+        expect(out.exp).toBe(v.expectOpen.exp);
+        expect(out.kind).toBe(v.expectOpen.kind);
+
+        // Functional wasm-side roundtrip: sealMulti → open each slot (with
+        // the vector clock so recorded expiries stay in the future).
+        const frag = wasm.sealMulti(
+          v.input.slots.map((s) => ({
+            password: s.password,
+            data: s.data,
+            kind: s.kind,
+            expSecs: s.expSecs,
+          })),
+          null
+        );
+        const now = VECTORS.now as number;
+        for (const s of v.input.slots) {
+          const o = await wasm.openWithTime(frag, s.password, now);
+          expect(o.data).toBe(s.data);
+          expect(o.kind).toBe(s.kind);
+        }
+      });
+    }
+  });
+
+  describe("deniable vectors: hidden open matches native output", () => {
+    for (const v of deniableRoundtrips) {
+      it(v.name, async () => {
+        // Hidden open of the native-recorded fragment (receiver-side).
+        const out = await wasm.openHidden(
+          v.expectFragment,
+          v.input.cover.password,
+          v.input.hiddenPassword
+        );
+        expect(out.data).toBe(v.expectOpen.data);
+        expect(out.exp).toBe(v.expectOpen.exp);
+        expect(out.kind).toBe(v.expectOpen.kind);
+
+        // Functional wasm-side roundtrip: sealDeniable → openHidden.
+        const frag = wasm.sealDeniable(
+          {
+            mode: v.input.cover.mode,
+            password: v.input.cover.password,
+            decoy: v.input.cover.decoy ?? undefined,
+          },
+          {
+            password: v.input.hiddenPassword,
+            data: v.input.hidden.data,
+            kind: v.input.hidden.kind,
+            expSecs: v.input.hidden.expSecs,
+          },
+          v.input.sizeClass
+        );
+        const o = await wasm.openHidden(
+          frag,
+          v.input.cover.password,
+          v.input.hiddenPassword
+        );
+        expect(o.data).toBe(v.expectOpen.data);
+        // Size class is exact regardless of secret count (D5). Unpadded
+        // base64url: byte length = floor(chars * 3 / 4).
+        expect(Math.floor((frag.length * 3) / 4)).toBe(v.input.sizeClass * 1024);
+      });
+    }
+  });
+
+  describe("hidden open errors match the taxonomy", () => {
+    for (const v of openHiddenErrors) {
+      it(v.name, async () => {
+        await expect(
+          wasm.openHidden(v.open.fragment, v.open.coverPassword, v.open.hiddenPassword)
+        ).rejects.toThrow(v.expectError);
+      });
+    }
+  });
+
+  describe("seal-multi errors match the taxonomy", () => {
+    for (const v of sealMultiErrors) {
+      it(v.name, () => {
+        const slots = Array.from({ length: v.input.slots }, (_, i) => ({
+          password: `pw-${i}`,
+          data: "x",
+        }));
+        expect(() => wasm.sealMulti(slots, null)).toThrow(v.expectError);
       });
     }
   });

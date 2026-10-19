@@ -30,13 +30,21 @@ export const TOKEN = "tok_browser_12345";
 export interface HarnessApi {
   hostname(): string;
   href(): string;
+  /** v2: `opts.slots` selects the multi-secret seal (spec 04 § multi). */
   sealFragment(opts: Record<string, unknown>): string;
   sealUrl(opts: Record<string, unknown>): string;
+  /** v2: deniable seal (spec 09). */
+  sealDeniable(opts: Record<string, unknown>): string;
   openUrl(
     url: string,
     opts?: Record<string, unknown>
   ): Promise<{ ok: true; value: OpenValue } | { ok: false; code: string; message: string }>;
   openFragment(
+    fragment: string,
+    opts?: Record<string, unknown>
+  ): Promise<{ ok: true; value: OpenValue } | { ok: false; code: string; message: string }>;
+  /** v2: deniable hidden-layer open (explicit-only, spec 09). */
+  openHidden(
     fragment: string,
     opts?: Record<string, unknown>
   ): Promise<{ ok: true; value: OpenValue } | { ok: false; code: string; message: string }>;

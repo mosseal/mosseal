@@ -6,8 +6,10 @@
 //!
 //! Commands:
 //! - `seal` — seal a token into a share-link fragment
+//! - `seal-multi` — seal N password-keyed secrets into one `MULTI` link
+//! - `seal-deniable` — seal a cover link hiding a hidden layer (spec 09)
 //! - `open` — open and verify a fragment (with `--ignore-expiry` for admin
-//!   debugging; see [`Command::Open`])
+//!   debugging and `--hidden-password` for the deniable path)
 //! - `gen-secret` — emit a fresh 32-byte base64url epoch secret
 
 use anyhow::Result;
@@ -16,13 +18,16 @@ use mosseal_core::{
     binding,
     epoch::EpochRegistry,
     kdf::Argon2Profile,
-    seal::{OpenOutput, SealContext, SealInput},
+    seal::{
+        CoverDecoy, CoverMode, DeniableSealInput, HiddenSpec, MultiSealInput, MultiSlot,
+        OpenOutput, SealContext, SealInput, SizeClass,
+    },
     time::TimeMode,
 };
 use rand::TryRng;
 
 /// Payload kind (spec 01). Mirrors the TS CLI's `--kind token|binary_blob`.
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum Kind {
     Token,
     BinaryBlob,
@@ -35,6 +40,86 @@ impl Kind {
             Kind::BinaryBlob => mosseal_core::envelope::kind::BINARY_BLOB,
         }
     }
+}
+
+/// A slots-file `kind` value (spec 05): accepts the string form (`"token"`,
+/// `"binary-blob"`/`"binary_blob"`/`"blob"`) or the wire kind byte (`1`/`2`)
+/// so one slots-file works across every admin surface (native CLI, TS CLI).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(untagged)]
+pub enum SlotKind {
+    Name(String),
+    Byte(u8),
+}
+
+impl SlotKind {
+    pub fn to_byte(&self) -> Result<u8> {
+        match self {
+            SlotKind::Byte(b) => match b {
+                1 => Ok(mosseal_core::envelope::kind::TOKEN),
+                2 => Ok(mosseal_core::envelope::kind::BINARY_BLOB),
+                other => anyhow::bail!("unknown slot kind byte {other}"),
+            },
+            SlotKind::Name(s) => match s.to_ascii_lowercase().as_str() {
+                "token" => Ok(mosseal_core::envelope::kind::TOKEN),
+                "binary-blob" | "binary_blob" | "blob" => {
+                    Ok(mosseal_core::envelope::kind::BINARY_BLOB)
+                }
+                other => anyhow::bail!("unknown slot kind {other:?}"),
+            },
+        }
+    }
+}
+
+/// Cover keying for `seal-deniable` (D4, spec 09).
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+pub enum CoverModeArg {
+    /// Password-keyed cover; hidden receiver needs both passwords.
+    Hidden,
+    /// Password-less cover; hidden receiver needs only the hidden password.
+    Plain,
+}
+
+impl CoverModeArg {
+    fn mode(self) -> CoverMode {
+        match self {
+            CoverModeArg::Hidden => CoverMode::Hidden,
+            CoverModeArg::Plain => CoverMode::Plain,
+        }
+    }
+}
+
+/// Fixed total envelope size for `seal-deniable --size-class` (D5).
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+pub enum SizeClassArg {
+    /// 1 KiB total envelope size.
+    Kib1,
+    /// 2 KiB total envelope size.
+    Kib2,
+    /// 4 KiB total envelope size.
+    Kib4,
+}
+
+impl SizeClassArg {
+    fn class(self) -> SizeClass {
+        match self {
+            SizeClassArg::Kib1 => SizeClass::Kib1,
+            SizeClassArg::Kib2 => SizeClass::Kib2,
+            SizeClassArg::Kib4 => SizeClass::Kib4,
+        }
+    }
+}
+
+/// One slot of `seal-multi` / `seal-deniable`, from `--slot "pw=secret"` or a
+/// slots-file JSON entry.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct SlotEntry {
+    pub password: String,
+    pub data: String,
+    #[serde(default)]
+    pub kind: Option<SlotKind>,
+    #[serde(rename = "expSecs", default)]
+    pub exp_secs: Option<u64>,
 }
 
 /// MOSSEAL CLI: generate and verify envelopes from a trusted machine.
@@ -66,11 +151,65 @@ pub enum Command {
         #[arg(long, env = "MOSSEAL_ALLOWED_DOMAINS", value_delimiter = ',')]
         domains: Vec<String>,
     },
+    /// Seal N password-keyed secrets into one MULTI link (spec 01 § MULTI)
+    SealMulti {
+        /// Slot as `PASSWORD=SECRET` (repeat for each slot)
+        #[arg(long = "slot", value_name = "PASSWORD=SECRET")]
+        slots: Vec<String>,
+        /// JSON file with a slot array: [{"password","data","kind"?,"expSecs"?}]
+        #[arg(long = "slots-file", value_name = "PATH")]
+        slots_file: Option<std::path::PathBuf>,
+        /// Default expiry (unix seconds) for slots without their own
+        #[arg(long)]
+        exp: Option<u64>,
+        /// Epoch secrets as base64url, `;`-joined (or set MOSSEAL_EPOCHS)
+        #[arg(long, env = "MOSSEAL_EPOCHS")]
+        epochs: String,
+        #[arg(long, env = "MOSSEAL_ALLOWED_DOMAINS", value_delimiter = ',')]
+        domains: Vec<String>,
+    },
+    /// Seal a deniable cover link hiding a hidden layer (spec 09)
+    SealDeniable {
+        /// Cover keying (default: hidden — strongest deniability)
+        #[arg(long, value_enum, default_value_t = CoverModeArg::Hidden)]
+        cover_mode: CoverModeArg,
+        /// Cover password (prompted if omitted and mode is hidden)
+        #[arg(long)]
+        cover_password: Option<String>,
+        /// User decoy content cycled into the cover padding
+        #[arg(long, conflicts_with = "cover_decoy_random")]
+        cover_decoy: Option<String>,
+        /// Fill the cover padding with CSPRNG bytes (default)
+        #[arg(long)]
+        cover_decoy_random: bool,
+        /// Hidden slot as `PASSWORD=SECRET` (repeat; the first slot's
+        /// password locates the hidden layer)
+        #[arg(long = "hidden-slot", value_name = "PASSWORD=SECRET")]
+        hidden_slot: Vec<String>,
+        /// JSON file with the hidden slot array (alternative to --hidden-slot)
+        #[arg(long = "hidden-slots-file", value_name = "PATH")]
+        hidden_slots_file: Option<std::path::PathBuf>,
+        /// Locating password (default: first hidden slot's password)
+        #[arg(long)]
+        hidden_password: Option<String>,
+        /// Fixed total envelope size; omit for the smallest class that fits
+        #[arg(long, value_enum)]
+        size_class: Option<SizeClassArg>,
+        /// Epoch secrets as base64url, `;`-joined (or set MOSSEAL_EPOCHS)
+        #[arg(long, env = "MOSSEAL_EPOCHS")]
+        epochs: String,
+        #[arg(long, env = "MOSSEAL_ALLOWED_DOMAINS", value_delimiter = ',')]
+        domains: Vec<String>,
+    },
     /// Open and verify a fragment
     Open {
         fragment: String,
         #[arg(long)]
         password: Option<String>,
+        /// Hidden-layer password (spec 09): present → deniable open after the
+        /// cover open; `--password` (if any) opens the cover
+        #[arg(long)]
+        hidden_password: Option<String>,
         #[arg(long, env = "MOSSEAL_EPOCHS")]
         epochs: String,
         #[arg(long, env = "MOSSEAL_ALLOWED_DOMAINS", value_delimiter = ',')]
@@ -148,9 +287,143 @@ pub fn seal_fragment_kind(
         deterministic_salt: None,
         deterministic_nonce: None,
         deterministic_epoch: None,
+        deterministic_version: None,
     };
     ctx.seal(&input)
         .map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))
+}
+
+/// Parse a `PASSWORD=SECRET` slot argument (the first `=` separates; the
+/// secret may contain further `=` characters, the password may not). The
+/// error never echoes the raw argument: it typically contains the password
+/// and secret, which must not land in logs.
+pub fn parse_slot_arg(spec: &str) -> Result<SlotEntry> {
+    let (password, data) = spec
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("slot must be PASSWORD=SECRET (missing '=')"))?;
+    if password.is_empty() {
+        anyhow::bail!("slot password must not be empty");
+    }
+    Ok(SlotEntry {
+        password: password.to_string(),
+        data: data.to_string(),
+        kind: None,
+        exp_secs: None,
+    })
+}
+
+/// Load slots from a `--slots-file` JSON array.
+pub fn parse_slots_file(path: &std::path::Path) -> Result<Vec<SlotEntry>> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
+    let entries: Vec<SlotEntry> = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("invalid slots file {}: {e}", path.display()))?;
+    Ok(entries)
+}
+
+fn slot_entries_to_input(
+    entries: &[SlotEntry],
+    default_exp: Option<u64>,
+) -> Result<MultiSealInput> {
+    if entries.is_empty() {
+        anyhow::bail!("at least one slot is required (--slot or --slots-file)");
+    }
+    Ok(MultiSealInput {
+        slots: entries
+            .iter()
+            .map(|e| {
+                Ok(MultiSlot {
+                    password: e.password.clone().into_bytes(),
+                    data: e.data.clone().into_bytes(),
+                    kind: e
+                        .kind
+                        .as_ref()
+                        .map(SlotKind::to_byte)
+                        .transpose()?
+                        .unwrap_or(mosseal_core::envelope::kind::TOKEN),
+                    exp: e.exp_secs.or(default_exp),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
+        deterministic_slot_salts: None,
+        deterministic_slot_nonces: None,
+        deterministic_salt: None,
+        deterministic_nonce: None,
+        deterministic_epoch: None,
+    })
+}
+
+/// Seal a multi-slot fragment (unit-testable core of `mosseal seal-multi`).
+pub fn seal_multi_fragment(
+    ctx: &SealContext,
+    entries: &[SlotEntry],
+    default_exp: Option<u64>,
+) -> Result<String> {
+    let input = slot_entries_to_input(entries, default_exp)?;
+    ctx.seal_multi(&input)
+        .map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))
+}
+
+/// Seal a deniable fragment (unit-testable core of `mosseal seal-deniable`).
+#[allow(clippy::too_many_arguments)]
+pub fn seal_deniable_fragment(
+    ctx: &SealContext,
+    cover_mode: CoverMode,
+    cover_password: Option<String>,
+    decoy: CoverDecoy,
+    hidden_entries: &[SlotEntry],
+    hidden_password: Option<String>,
+    size_class: Option<SizeClass>,
+) -> Result<String> {
+    if hidden_entries.is_empty() {
+        anyhow::bail!(
+            "at least one hidden slot is required (--hidden-slot or --hidden-slots-file)"
+        );
+    }
+    // The first slot's password locates the hidden layer unless overridden.
+    let hidden_password = hidden_password.unwrap_or_else(|| hidden_entries[0].password.clone());
+    let input = DeniableSealInput {
+        cover_mode,
+        cover_password: cover_password.map(String::into_bytes),
+        cover_decoy: decoy,
+        hidden_password: hidden_password.into_bytes(),
+        hidden: HiddenSpec::Multi(slot_entries_to_input(hidden_entries, None)?),
+        size_class,
+        deterministic_salt: None,
+        deterministic_nonce: None,
+        deterministic_padding: None,
+        deterministic_epoch: None,
+    };
+    ctx.seal_deniable(&input)
+        .map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))
+}
+
+/// Open a fragment's hidden layer (unit-testable core of `mosseal open
+/// --hidden-password`).
+pub fn open_hidden_fragment(
+    ctx: &SealContext,
+    fragment: &str,
+    cover_password: Option<&str>,
+    hidden_password: &str,
+    ignore_expiry: bool,
+) -> Result<OpenOutput> {
+    let fetcher = NoFetch;
+    let result = if ignore_expiry {
+        ctx.open_deniable_ignoring_expiry(
+            fragment,
+            cover_password.map(str::as_bytes),
+            Some(hidden_password.as_bytes()),
+            &fetcher,
+        )
+    } else {
+        ctx.open_deniable(
+            fragment,
+            cover_password.map(str::as_bytes),
+            Some(hidden_password.as_bytes()),
+            &fetcher,
+        )
+    };
+    result.map_err(|e| anyhow::anyhow!("{}: {}", e.code.as_str(), e.detail))
 }
 
 /// Open `fragment`, optionally ignoring expiry (admin debugging).
@@ -211,17 +484,87 @@ pub fn run_cli(cli: Cli) -> Result<()> {
             println!("{frag}");
             Ok(())
         }
+        Command::SealMulti {
+            slots,
+            slots_file,
+            exp,
+            epochs,
+            domains,
+        } => {
+            let mut entries: Vec<SlotEntry> = slots
+                .iter()
+                .map(|s| parse_slot_arg(s))
+                .collect::<Result<_>>()?;
+            if let Some(path) = &slots_file {
+                entries.extend(parse_slots_file(path)?);
+            }
+            let ctx = context_from(&epochs, domains)?;
+            let frag = seal_multi_fragment(&ctx, &entries, exp)?;
+            println!("{frag}");
+            Ok(())
+        }
+        Command::SealDeniable {
+            cover_mode,
+            cover_password,
+            cover_decoy,
+            cover_decoy_random: _,
+            hidden_slot,
+            hidden_slots_file,
+            hidden_password,
+            size_class,
+            epochs,
+            domains,
+        } => {
+            let cover_password = match (cover_mode, cover_password) {
+                (CoverModeArg::Hidden, None) => {
+                    Some(rpassword::prompt_password("Cover password: ")?)
+                }
+                (_, pw) => pw,
+            };
+            let decoy = match cover_decoy {
+                Some(d) if !d.is_empty() => CoverDecoy::User(d.into_bytes()),
+                _ => CoverDecoy::Random,
+            };
+            let mut hidden: Vec<SlotEntry> = hidden_slot
+                .iter()
+                .map(|s| parse_slot_arg(s))
+                .collect::<Result<_>>()?;
+            if let Some(path) = &hidden_slots_file {
+                hidden.extend(parse_slots_file(path)?);
+            }
+            let ctx = context_from(&epochs, domains)?;
+            let frag = seal_deniable_fragment(
+                &ctx,
+                cover_mode.mode(),
+                cover_password,
+                decoy,
+                &hidden,
+                hidden_password,
+                size_class.map(SizeClassArg::class),
+            )?;
+            println!("{frag}");
+            Ok(())
+        }
         Command::Open {
             fragment,
             password,
+            hidden_password,
             epochs,
             domains,
             ignore_expiry,
         } => {
             let ctx = context_from(&epochs, domains)?;
-            let out = open_fragment(&ctx, &fragment, password.as_deref(), ignore_expiry)?;
+            let out = match hidden_password {
+                // Deniable path (spec 09): --password (if any) opens the
+                // cover; --hidden-password recovers and opens the layer.
+                Some(hp) => {
+                    open_hidden_fragment(&ctx, &fragment, password.as_deref(), &hp, ignore_expiry)?
+                }
+                None => open_fragment(&ctx, &fragment, password.as_deref(), ignore_expiry)?,
+            };
             println!(
-                "kind: {}\nexp:  {}\ndata: {}",
+                "version: {}\nkind: {}\nexp:  {}\ndata: {}",
+                out.version,
                 out.kind,
                 out.exp,
                 String::from_utf8_lossy(&out.data)
@@ -342,5 +685,143 @@ mod tests {
         let ctx = context_from(&b64_secret(7), vec!["a.test".into()]).unwrap();
         let big = "x".repeat(mosseal_core::MAX_PAYLOAD_BYTES + 1);
         assert!(seal_fragment(&ctx, big, None, None).is_err());
+    }
+
+    // --- v2: seal-multi / seal-deniable / open --hidden-password ---
+
+    fn two_slots() -> Vec<SlotEntry> {
+        vec![
+            SlotEntry {
+                password: "pw-one".into(),
+                data: "secret_one".into(),
+                kind: None,
+                exp_secs: None,
+            },
+            SlotEntry {
+                password: "pw-two".into(),
+                data: "secret_two".into(),
+                kind: Some(SlotKind::Byte(mosseal_core::envelope::kind::BINARY_BLOB)),
+                exp_secs: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn multi_fragment_roundtrip() {
+        let ctx = context_from(&b64_secret(8), vec!["a.test".into()]).unwrap();
+        let frag = seal_multi_fragment(&ctx, &two_slots(), None).unwrap();
+        let out = open_fragment(&ctx, &frag, Some("pw-two"), false).unwrap();
+        assert_eq!(out.data, b"secret_two");
+        assert_eq!(out.kind, mosseal_core::envelope::kind::BINARY_BLOB);
+        assert_eq!(out.version, 2);
+        let err = open_fragment(&ctx, &frag, Some("WRONG"), false).unwrap_err();
+        assert!(err.to_string().contains("BAD_PASSWORD"));
+    }
+
+    #[test]
+    fn parse_slot_arg_splits_on_first_equals() {
+        let e = parse_slot_arg("pw=secret=with=equals").unwrap();
+        assert_eq!(e.password, "pw");
+        assert_eq!(e.data, "secret=with=equals");
+        assert!(parse_slot_arg("no-equals").is_err());
+        assert!(parse_slot_arg("=empty-pw").is_err());
+    }
+
+    #[test]
+    fn slots_file_parses_and_validates() {
+        let dir = std::env::temp_dir().join(format!("mosseal-cli-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("slots.json");
+        std::fs::write(
+            &path,
+            r#"[
+                {"password":"p1","data":"d1"},
+                {"password":"p2","data":"d2","kind":"binary-blob","expSecs":2000},
+                {"password":"p3","data":"d3","kind":2}
+            ]"#,
+        )
+        .unwrap();
+        let entries = parse_slots_file(&path).unwrap();
+        assert_eq!(entries.len(), 3);
+        // String and numeric kind forms both resolve to the wire byte.
+        assert_eq!(
+            entries[1].kind.as_ref().unwrap().to_byte().unwrap(),
+            mosseal_core::envelope::kind::BINARY_BLOB
+        );
+        assert_eq!(
+            entries[2].kind.as_ref().unwrap().to_byte().unwrap(),
+            mosseal_core::envelope::kind::BINARY_BLOB
+        );
+        assert_eq!(entries[1].exp_secs, Some(2000));
+        // Unknown kind fails cleanly.
+        std::fs::write(&path, r#"[{"password":"p","data":"d","kind":"weird"}]"#).unwrap();
+        let entries = parse_slots_file(&path).unwrap();
+        assert!(entries[0].kind.as_ref().unwrap().to_byte().is_err());
+        // Broken JSON fails cleanly.
+        std::fs::write(&path, "{not json").unwrap();
+        assert!(parse_slots_file(&path).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn parse_slot_arg_never_echoes_the_argument() {
+        // Malformed values contain credentials; the error must not repeat them.
+        let err = parse_slot_arg("hunter2:secret").unwrap_err().to_string();
+        assert!(!err.contains("hunter2"), "error leaked the password: {err}");
+        assert!(!err.contains("secret"), "error leaked the secret: {err}");
+    }
+
+    #[test]
+    fn deniable_fragment_roundtrip_both_cover_modes() {
+        let ctx = context_from(&b64_secret(9), vec!["a.test".into()]).unwrap();
+        for (mode, cover_pw) in [
+            (CoverMode::Plain, None),
+            (CoverMode::Hidden, Some("cover-pw".to_string())),
+        ] {
+            let frag = seal_deniable_fragment(
+                &ctx,
+                mode,
+                cover_pw.clone(),
+                CoverDecoy::Random,
+                &two_slots(),
+                None,
+                None,
+            )
+            .unwrap();
+            let out = open_hidden_fragment(
+                &ctx,
+                &frag,
+                cover_pw.as_deref(),
+                "pw-one", // first slot's password locates by default
+                false,
+            )
+            .unwrap();
+            assert_eq!(out.data, b"secret_one");
+            assert_eq!(out.version, 2);
+            // Wrong hidden password.
+            let err =
+                open_hidden_fragment(&ctx, &frag, cover_pw.as_deref(), "WRONG", false).unwrap_err();
+            assert!(err.to_string().contains("BAD_PASSWORD"));
+        }
+    }
+
+    #[test]
+    fn deniable_fragment_enforces_slot_cap() {
+        let ctx = context_from(&b64_secret(10), vec!["a.test".into()]).unwrap();
+        let mut slots = two_slots();
+        while slots.len() <= mosseal_core::envelope::multi::MAX_SLOTS {
+            slots.push(slots[0].clone());
+        }
+        let err = seal_deniable_fragment(
+            &ctx,
+            CoverMode::Plain,
+            None,
+            CoverDecoy::Random,
+            &slots,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("TOO_MANY_SLOTS"));
     }
 }

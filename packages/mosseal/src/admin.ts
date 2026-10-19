@@ -14,8 +14,14 @@
  *      (the same config `init`/`rotate`/`build` use).
  */
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { Admin, KIND_BINARY_BLOB, KIND_TOKEN } from "./admin-wasm.js";
+import {
+  Admin,
+  KIND_BINARY_BLOB,
+  KIND_TOKEN,
+  type AdminSlot,
+} from "./admin-wasm.js";
 import { loadEnvFile } from "./dotenv.js";
 import { validateEnv } from "./env.js";
 
@@ -35,6 +41,24 @@ export interface AdminOpts {
   kind?: string;
   /** `--ignore-expiry` (open only): skip the expiry check. */
   ignoreExpiry?: boolean;
+  /** `--slot PASSWORD=SECRET` (seal-multi / seal-deniable): repeatable. */
+  slots?: string[];
+  /** `--slots-file` / `--hidden-slots-file`: JSON slot array path. */
+  slotsFile?: string;
+  /** `--hidden-slot PASSWORD=SECRET` (seal-deniable): repeatable. */
+  hiddenSlots?: string[];
+  /** `--hidden-slots-file` (seal-deniable): JSON file with the hidden slots. */
+  hiddenSlotsFile?: string;
+  /** `--cover-mode hidden|plain` (seal-deniable, default hidden). */
+  coverMode?: string;
+  /** `--cover-password` (seal-deniable). */
+  coverPassword?: string;
+  /** `--cover-decoy` (seal-deniable). */
+  coverDecoy?: string;
+  /** `--hidden-password` (seal-deniable / open): locating password. */
+  hiddenPassword?: string;
+  /** `--size-class 1|2|4` (seal-deniable): total envelope size in KiB. */
+  sizeClass?: number;
 }
 
 /** Generate a fresh 32-byte epoch secret as base64url (no padding). */
@@ -159,6 +183,76 @@ export function cmdGenSecret(): { ok: true } {
   return { ok: true };
 }
 
+/** A parsed `PASSWORD=SECRET` slot (first `=` separates). */
+export interface SlotPair {
+  password: string;
+  data: string;
+}
+
+/**
+ * Parse a `PASSWORD=SECRET` slot argument (mirrors the native CLI). The
+ * error never echoes the raw argument: it typically contains the password
+ * and secret, which must not land in logs.
+ */
+export function parseSlotArg(spec: string): SlotPair {
+  const eq = spec.indexOf("=");
+  if (eq < 0) {
+    throw new Error("slot must be PASSWORD=SECRET (missing '=')");
+  }
+  if (eq === 0) {
+    throw new Error("slot must be PASSWORD=SECRET (empty password)");
+  }
+  return { password: spec.slice(0, eq), data: spec.slice(eq + 1) };
+}
+
+/** A slots-file entry as accepted on disk (kind may be a name or a byte). */
+interface SlotFileEntry {
+  password: string;
+  data: string;
+  kind?: string | number;
+  expSecs?: number;
+}
+
+/** Map a slots-file `kind` (name or wire byte) to the payload kind byte. */
+function normalizeSlotKind(kind: string | number): number {
+  if (typeof kind === "number") {
+    if (kind === 1 || kind === 2) return kind;
+    throw new Error(`unknown slot kind byte ${kind}`);
+  }
+  switch (kind.toLowerCase()) {
+    case "token":
+      return KIND_TOKEN;
+    case "binary-blob":
+    case "binary_blob":
+    case "blob":
+      return KIND_BINARY_BLOB;
+    default:
+      throw new Error(`unknown slot kind '${kind}'`);
+  }
+}
+
+/** Load slot entries from a `--slots-file` JSON array (mirrors the native CLI). */
+function loadSlotsFile(path: string): AdminSlot[] {
+  const entries: SlotFileEntry[] = JSON.parse(readFileSync(path, "utf8"));
+  return entries.map((s) => ({
+    password: s.password,
+    data: s.data,
+    kind: s.kind === undefined ? undefined : normalizeSlotKind(s.kind),
+    expSecs: s.expSecs,
+  }));
+}
+
+/** Collect slots from `--slot` repeats plus an optional JSON file. */
+function collectSlots(opts: AdminOpts): AdminSlot[] {
+  const slots = (opts.slots ?? []).map(parseSlotArg);
+  const fileSlots = opts.slotsFile ? loadSlotsFile(opts.slotsFile) : [];
+  const all: AdminSlot[] = [...slots, ...fileSlots];
+  if (all.length === 0) {
+    throw new Error("at least one slot is required (--slot or --slots-file)");
+  }
+  return all;
+}
+
 /** `mosseal seal <token>` — seal a token into a share-link fragment. */
 export async function cmdSeal(token: string | undefined, opts: AdminOpts = {}): Promise<{ ok: true }> {
   const cwd = resolve(opts.cwd ?? process.cwd());
@@ -179,6 +273,58 @@ export async function cmdSeal(token: string | undefined, opts: AdminOpts = {}): 
   return { ok: true };
 }
 
+/** `mosseal seal-multi` — seal N password-keyed secrets into one MULTI link. */
+export async function cmdSealMulti(opts: AdminOpts = {}): Promise<{ ok: true }> {
+  const cwd = resolve(opts.cwd ?? process.cwd());
+  const slots = collectSlots(opts);
+  const admin = Admin.create(resolveEpochs(opts, cwd), resolveDomains(opts, cwd));
+  try {
+    // Per-slot kind/expSecs ride along with the collected entries (parity
+    // with the native CLI's slots-file handling); `--exp` is the default.
+    const fragment = admin.sealMulti(slots, opts.exp);
+    console.log(fragment);
+  } finally {
+    admin.free();
+  }
+  return { ok: true };
+}
+
+/** `mosseal seal-deniable` — seal a cover link hiding a hidden layer. */
+export async function cmdSealDeniable(opts: AdminOpts = {}): Promise<{ ok: true }> {
+  const cwd = resolve(opts.cwd ?? process.cwd());
+  const mode = opts.coverMode ?? "hidden";
+  if (mode !== "hidden" && mode !== "plain") {
+    throw new Error(`invalid value '${mode}' for '--cover-mode' [possible values: hidden, plain]`);
+  }
+  let coverPassword = opts.coverPassword;
+  if (mode === "hidden" && coverPassword === undefined) {
+    coverPassword = await promptPassword("Cover password: ");
+  }
+  const slots = collectSlots(opts);
+  // The first slot's password locates the hidden layer unless overridden
+  // (mirrors the native CLI).
+  const hiddenPassword = opts.hiddenPassword ?? slots[0].password;
+  const admin = Admin.create(resolveEpochs(opts, cwd), resolveDomains(opts, cwd));
+  try {
+    const fragment = admin.sealDeniable(
+      {
+        mode,
+        password: coverPassword,
+        decoy: opts.coverDecoy,
+      },
+      {
+        password: hiddenPassword,
+        slots,
+      },
+      (opts.sizeClass as 1 | 2 | 4 | undefined) ?? undefined
+    );
+    console.log(fragment);
+  } finally {
+    admin.free();
+  }
+  return { ok: true };
+}
+
 /** `mosseal open <fragment>` — open and verify a fragment. */
 export async function cmdOpen(fragment: string, opts: AdminOpts = {}): Promise<{ ok: true }> {
   const cwd = resolve(opts.cwd ?? process.cwd());
@@ -186,11 +332,26 @@ export async function cmdOpen(fragment: string, opts: AdminOpts = {}): Promise<{
 
   const admin = Admin.create(resolveEpochs(opts, cwd), resolveDomains(opts, cwd));
   try {
+    if (opts.hiddenPassword !== undefined) {
+      // Deniable path (spec 09): --password (if any) opens the cover;
+      // --hidden-password recovers and opens the hidden layer.
+      const out = admin.openHidden(fragment, {
+        coverPassword: password,
+        hiddenPassword: opts.hiddenPassword,
+        ignoreExpiry: opts.ignoreExpiry,
+      });
+      console.log(
+        `version: ${out.version}\nkind: ${out.kind}\nexp:  ${out.exp}\ndata: ${out.data}`
+      );
+      return { ok: true };
+    }
     const out = admin.open(fragment, {
       password: password || undefined,
       ignoreExpiry: opts.ignoreExpiry,
     });
-    console.log(`kind: ${out.kind}\nexp:  ${out.exp}\ndata: ${out.data}`);
+    console.log(
+      `version: ${out.version}\nkind: ${out.kind}\nexp:  ${out.exp}\ndata: ${out.data}`
+    );
   } finally {
     admin.free();
   }

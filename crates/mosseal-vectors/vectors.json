@@ -11,7 +11,7 @@
       "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
     ]
   },
-  "envelopeVersion": 1,
+  "envelopeVersion": 2,
   "formatVersion": 1,
   "generatedBy": "mosseal-vectors",
   "now": 1700000000.0,
@@ -20,7 +20,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "020202020202020202020202",
-        "salt": "01010101010101010101010101010101"
+        "salt": "01010101010101010101010101010101",
+        "version": 1
       },
       "expectFragment": "AQACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
       "expectOpen": {
@@ -42,7 +43,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "040404040404040404040404",
-        "salt": "03030303030303030303030303030303"
+        "salt": "03030303030303030303030303030303",
+        "version": 1
       },
       "expectFragment": "AQICEAMDAwMDAwMDAwMDAwMDAwMMBAQEBAQEBAQEBAQEmcmk5Li3IdoCJjKlpoWUVmnR2sj81o2SaSOYOwM1MlJXeJ7aSI7c",
       "expectOpen": {
@@ -64,7 +66,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "060606060606060606060606",
-        "salt": "05050505050505050505050505050505"
+        "salt": "05050505050505050505050505050505",
+        "version": 1
       },
       "expectFragment": "AQECEAUFBQUFBQUFBQUFBQUFBQUMBgYGBgYGBgYGBgYG2nwCRPO0wnrz5ZFXWDTnYagR3Jz_ZFN1iA6aeaKMXXyxfss9UbXq",
       "expectOpen": {
@@ -86,7 +89,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "080808080808080808080808",
-        "salt": "07070707070707070707070707070707"
+        "salt": "07070707070707070707070707070707",
+        "version": 1
       },
       "expectFragment": "AQMCEAcHBwcHBwcHBwcHBwcHBwcMCAgICAgICAgICAgIDr0gMAV1sjzMM75WFlbug5tHMtebxEDA76OFP8rl_XxWW998Z1yt",
       "expectOpen": {
@@ -108,7 +112,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "0a0a0a0a0a0a0a0a0a0a0a0a",
-        "salt": "09090909090909090909090909090909"
+        "salt": "09090909090909090909090909090909",
+        "version": 1
       },
       "expectFragment": "AQACEAkJCQkJCQkJCQkJCQkJCQkMCgoKCgoKCgoKCgoKOiBNi4rdAYapdobI13UHesjvusL2EHncjp8zVv0LK6tR-J94gIXb",
       "expectOpen": {
@@ -130,7 +135,8 @@
       "deterministic": {
         "epoch": 2,
         "nonce": "0c0c0c0c0c0c0c0c0c0c0c0c",
-        "salt": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+        "salt": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "version": 1
       },
       "expectFragment": "AQACEAsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMDAwMfgFyn_S_ZLsXVBMRbEe7VmKYg4BURxlCWBnD0pB8VC-Rhag1m_83",
       "expectOpen": {
@@ -152,7 +158,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "0e0e0e0e0e0e0e0e0e0e0e0e",
-        "salt": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
+        "salt": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d",
+        "version": 1
       },
       "expectFragment": "AQACEA0NDQ0NDQ0NDQ0NDQ0NDQ0MDg4ODg4ODg4ODg4OVB5eVvixX6331YT2M1DC8G0arf6Jsq1KSAyTtnE",
       "expectOpen": {
@@ -174,7 +181,8 @@
       "deterministic": {
         "epoch": null,
         "nonce": "101010101010101010101010",
-        "salt": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+        "salt": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+        "version": 1
       },
       "expectFragment": "AQACEA8PDw8PDw8PDw8PDw8PDw8MEBAQEBAQEBAQEBAQAkR27gyyVrXAmYBzdC3u6fbq1XXPLwSR21gQFS_NbaXIp67KvZCcuA",
       "expectOpen": {
@@ -189,6 +197,121 @@
         "password": null
       },
       "name": "unicode-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "161616161616161616161616",
+        "salt": "15151515151515151515151515151515",
+        "version": 2
+      },
+      "expectFragment": "AgACEBUVFRUVFRUVFRUVFRUVFRUMFhYWFhYWFhYWFhYWhXdkQqbo5yosYXSDeQzCqEyuqKfpi1IbIeQiJ8jiCjVKoN2PwGjLYDvXtMuJj90V0OIf-XB3WA",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "v2-token-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "181818181818181818181818",
+        "salt": "17171717171717171717171717171717",
+        "version": 2
+      },
+      "expectFragment": "AgECEBcXFxcXFxcXFxcXFxcXFxcMGBgYGBgYGBgYGBgY3sVV8u3tzUILX_1frUxjyO92fVPclHQIhrQqeH3Jshn7IIkFiBjcS9uOC4rWL1D6p5x7K_Mhtw",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": null,
+        "kind": 1,
+        "password": "hunter2"
+      },
+      "name": "v2-token-password-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "1a1a1a1a1a1a1a1a1a1a1a1a",
+        "salt": "19191919191919191919191919191919",
+        "version": 2
+      },
+      "expectFragment": "AgICEBkZGRkZGRkZGRkZGRkZGRkMGhoaGhoaGhoaGhoamKaNqoI5j5mqFCJ-FQWH2fb5-HI9dvO9fXKfNXCavLyEkzebhS66MLLxaai-OUa_G5bn903-EQ",
+      "expectOpen": {
+        "data": "tok_abc123",
+        "exp": 1700003600,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_abc123",
+        "expSecs": 1700003600,
+        "kind": 1,
+        "password": null
+      },
+      "name": "v2-token-nopass-exp3600",
+      "openWithTime": 1700000000.0,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": 2,
+        "nonce": "1c1c1c1c1c1c1c1c1c1c1c1c",
+        "salt": "1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
+        "version": 2
+      },
+      "expectFragment": "AgACEBsbGxsbGxsbGxsbGxsbGxsMHBwcHBwcHBwcHBwcSexvd91QlL4xS0gPzEHG48nvhmVBwmqdZYEoJbJm51Ywqs8I4GljermClA9ZA2lVbGzk7Ysa9w",
+      "expectOpen": {
+        "data": "tok_epoch2",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "data": "tok_epoch2",
+        "expSecs": null,
+        "kind": 1,
+        "password": null
+      },
+      "name": "v2-epoch2-nopass-exp0",
+      "openWithTime": null,
+      "type": "roundtrip"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "1e1e1e1e1e1e1e1e1e1e1e1e",
+        "salt": "1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d",
+        "version": 2
+      },
+      "expectFragment": "AgACEB0dHR0dHR0dHR0dHR0dHR0MHh4eHh4eHh4eHh4e7lo50EeHt-JVlfThuwQ3ERUlvS0tXxANNr7vKf8bun_PjKK8MSe5MkN2vAyeZGPL__EyD5drVQ",
+      "expectOpen": {
+        "data": "state-blob",
+        "exp": 0,
+        "kind": 2
+      },
+      "input": {
+        "data": "state-blob",
+        "expSecs": null,
+        "kind": 2,
+        "password": null
+      },
+      "name": "v2-binaryblob-nopass-exp0",
       "openWithTime": null,
       "type": "roundtrip"
     },
@@ -246,7 +369,7 @@
       "expectError": "UNSUPPORTED_VERSION",
       "name": "unsupported-version",
       "open": {
-        "fragment": "AgACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
+        "fragment": "AwACEAEBAQEBAQEBAQEBAQEBAQEMAgICAgICAgICAgIC8yHQexOIOEoaSAdmh6hhExeb87jgGfhQKFAcyKr8eaxiRS5oq89s",
         "nowSecs": null,
         "password": null
       },
@@ -302,6 +425,159 @@
       },
       "name": "payload-too-large",
       "type": "seal-error"
+    },
+    {
+      "expectError": "MALFORMED_ENVELOPE",
+      "name": "v2-commitment-missing",
+      "open": {
+        "fragment": "AgACECUlJSUlJSUlJSUlJSUlJSUMJiYmJiYmJiYmJiYmq_mcr-etD66syxyBjH7j2r2ad8_9i4faQO8VCuD9alqlv9V5vY2X",
+        "nowSecs": null,
+        "password": null
+      },
+      "type": "open-error"
+    },
+    {
+      "deterministic": {
+        "epoch": null,
+        "nonce": "f2f2f2f2f2f2f2f2f2f2f2f2",
+        "salt": "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
+        "slotNonces": [
+          "e1e1e1e1e1e1e1e1e1e1e1e1",
+          "e2e2e2e2e2e2e2e2e2e2e2e2"
+        ],
+        "slotSalts": [
+          "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+          "d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2"
+        ]
+      },
+      "expectFragment": "AgACEPHx8fHx8fHx8fHx8fHx8fEM8vLy8vLy8vLy8vLy5yOfsR874SKnjYFkfWGtoW1C3u3Ep5C-QL6YvH0ObBtd8Pl5iduHzksSjMVL5ZravXC0HgMYj_PPRw4HoHm4P1pjOrj3apvd0VefF-BF7n4HMMfxR3o6PzPORBWR85KSFmuHsjNkuy2vk6x54lAqBnBchdaaO62-0_gh_jtfunKMJKcuQ5d1MKFjwePe-AUVVsXr94tyMOTve0OXOGqP6LcE96b2FCdp2ta3cCZj78fP3umq5JIK-xo-5fbpagqjEBgQWe9M3RUFfMVabHmDMph0Ve_IhXI5qjHbk3o",
+      "expectOpen": {
+        "data": "secret_two",
+        "exp": 1700003600,
+        "kind": 2,
+        "password": "pw-two"
+      },
+      "input": {
+        "slots": [
+          {
+            "data": "secret_one",
+            "expSecs": null,
+            "kind": 1,
+            "password": "pw-one"
+          },
+          {
+            "data": "secret_two",
+            "expSecs": 1700003600,
+            "kind": 2,
+            "password": "pw-two"
+          }
+        ]
+      },
+      "name": "multi-2slot",
+      "openWithTime": 1700000000.0,
+      "type": "multi-roundtrip"
+    },
+    {
+      "expectError": "BAD_PASSWORD",
+      "name": "multi-wrong-password",
+      "open": {
+        "fragment": "AgACEPHx8fHx8fHx8fHx8fHx8fEM8vLy8vLy8vLy8vLy5yOfsR874SKnjYFkfWGtoW1C3u3Ep5C-QL6YvH0ObBtd8Pl5iduHzksSjMVL5ZravXC0HgMYj_PPRw4HoHm4P1pjOrj3apvd0VefF-BF7n4HMMfxR3o6PzPORBWR85KSFmuHsjNkuy2vk6x54lAqBnBchdaaO62-0_gh_jtfunKMJKcuQ5d1MKFjwePe-AUVVsXr94tyMOTve0OXOGqP6LcE96b2FCdp2ta3cCZj78fP3umq5JIK-xo-5fbpagqjEBgQWe9M3RUFfMVabHmDMph0Ve_IhXI5qjHbk3o",
+        "nowSecs": null,
+        "password": "WRONG"
+      },
+      "type": "open-error"
+    },
+    {
+      "expectError": "TOO_MANY_SLOTS",
+      "input": {
+        "slots": 5
+      },
+      "name": "multi-too-many-slots",
+      "type": "seal-multi-error"
+    },
+    {
+      "deterministic": {
+        "hiddenNonce": "393939393939393939393939",
+        "hiddenSalt": "38383838383838383838383838383838",
+        "nonce": "363636363636363636363636",
+        "paddingSeed": "3737373737373737373737373737373737373737373737373737373737373737",
+        "salt": "35353535353535353535353535353535"
+      },
+      "expectFragment": "AgACEDU1NTU1NTU1NTU1NTU1NTUMNjY2NjY2NjY2NjY2EWPqAp4JRsaHYtEGwMHeOns9ujRpwZh1Cvl5-O8yrHh1Gv5cXmXNwb4erAKzJXwoLuOapj4hPvJC7u9YAgR0sS_v9ZtFkst8L6LQdYoGWgkaClIJyIpJBlMF1FXOlIv9-sWaYGCE3BV8Ax5VsqcEDBRbeMfffArwbFLthGWEF4-4P-mPrc-DMQvCRJeorH-zMM9ibcXEQ_p0vpVHJrvLF98OIovJakRp9GxvUCMh-Ohc71-oS3npialXLACBwP9uj2YiFH8HwOtwrhgQXbBRucfqK-rDrpstdNXyOI8TXkuiiYB8pEb8FzJI09GQLYUZD46kBhzJawpCKwWimcnb-F_q-sdoWEPTqpeQqK_cm5sAPQnqBFHxhlp4gXLYSk7GuhUA4tM98ea3yPNTtLzURn0kACTJarNo-0f70l2PfZTH_-hJ2KIQFMf3e_EzvLeDwlw-rl1HRkb9RD-4FcgCzwNV9iJBDKqcxSzOOQ2Bw7I7pvjMdvDzQx6WNufW1Suwy1Kw3-TuDL7sUZQL_CSr9ljoOR2gZB_YPdDX3vIZ4PbDIHQrYDtlxUcmhmPSfgvARGqgs3ZbRilorT8aIWcT8snGj3Hyf32jqOxAaQB9xiQtZ2PpxrNJ7pNXe16euk2MC7fnMo8tMHCeNIIZ7BA_9CrsGd9i6XNTZmtABU8tOzTV5eG43ggpFsBLFb-s94FE_56cFhXd748ZTzGjHk1D7CGGvOsBnCT5j31uh7dEEXfDP-TM0i3ZzU3MlPmgEHONuNmZLDx1XACLwL2JVfM7F0pSudd4bmCqvfh7eNVO2q5NutH6knNB7rqQa0wsKCI48X_EeVx3ni9Is8Ilw6pgIKfDDpSirh_QZzvo61pT96mpRDDWzK9DTfyTtebJOcc_yXSwBpQDGmiy_q2rMd2qzhLsq8JnXE3gonfo8k-1QZADxRz9KXw-mh6WJKnRAuCaWmBlUaXMu-NrejdwwcyaEElbfTI2eO-0VH4N_oj0sVc3tc4T4TQURwFrganZ_gCPIepq7ZhP88Q6VxRUojNEuERexICYWbpMd22WTeT-nYeHG7JQeTRhsL52amxVHD_XjvLWS2YuX-ojJ7GwMSyNNDkJ2wrXenrED0rDd9kyaLz1FY1wh9k1Uo-waTe8tOAqgRBWK88ZbS8qbDTFnXY0y24_7oJDVUU3GmlehLZF0L6QR9-peSB0MZ-ardJpxA8SCy6GwltDoqS64xgdwULRMCa5TjvxPhAvwG7Fo8nJZm6HXCGvBP9p_7S8dCzBwqdmyPKhNAACaBTgWFS0vIJSJqKU6JP-46GxjgTPkckV9A",
+      "expectOpen": {
+        "coverPassword": null,
+        "data": "hidden_secret_123",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "cover": {
+          "decoy": "plausible decoy bytes ",
+          "mode": "plain",
+          "password": null
+        },
+        "hidden": {
+          "data": "hidden_secret_123",
+          "expSecs": null,
+          "kind": 1
+        },
+        "hiddenPassword": "hidden-hunter",
+        "sizeClass": 1
+      },
+      "name": "deniable-plain-single",
+      "type": "deniable-roundtrip"
+    },
+    {
+      "expectError": "BAD_PASSWORD",
+      "name": "deniable-plain-single-wrong-hidden-password",
+      "open": {
+        "coverPassword": null,
+        "fragment": "AgACEDU1NTU1NTU1NTU1NTU1NTUMNjY2NjY2NjY2NjY2EWPqAp4JRsaHYtEGwMHeOns9ujRpwZh1Cvl5-O8yrHh1Gv5cXmXNwb4erAKzJXwoLuOapj4hPvJC7u9YAgR0sS_v9ZtFkst8L6LQdYoGWgkaClIJyIpJBlMF1FXOlIv9-sWaYGCE3BV8Ax5VsqcEDBRbeMfffArwbFLthGWEF4-4P-mPrc-DMQvCRJeorH-zMM9ibcXEQ_p0vpVHJrvLF98OIovJakRp9GxvUCMh-Ohc71-oS3npialXLACBwP9uj2YiFH8HwOtwrhgQXbBRucfqK-rDrpstdNXyOI8TXkuiiYB8pEb8FzJI09GQLYUZD46kBhzJawpCKwWimcnb-F_q-sdoWEPTqpeQqK_cm5sAPQnqBFHxhlp4gXLYSk7GuhUA4tM98ea3yPNTtLzURn0kACTJarNo-0f70l2PfZTH_-hJ2KIQFMf3e_EzvLeDwlw-rl1HRkb9RD-4FcgCzwNV9iJBDKqcxSzOOQ2Bw7I7pvjMdvDzQx6WNufW1Suwy1Kw3-TuDL7sUZQL_CSr9ljoOR2gZB_YPdDX3vIZ4PbDIHQrYDtlxUcmhmPSfgvARGqgs3ZbRilorT8aIWcT8snGj3Hyf32jqOxAaQB9xiQtZ2PpxrNJ7pNXe16euk2MC7fnMo8tMHCeNIIZ7BA_9CrsGd9i6XNTZmtABU8tOzTV5eG43ggpFsBLFb-s94FE_56cFhXd748ZTzGjHk1D7CGGvOsBnCT5j31uh7dEEXfDP-TM0i3ZzU3MlPmgEHONuNmZLDx1XACLwL2JVfM7F0pSudd4bmCqvfh7eNVO2q5NutH6knNB7rqQa0wsKCI48X_EeVx3ni9Is8Ilw6pgIKfDDpSirh_QZzvo61pT96mpRDDWzK9DTfyTtebJOcc_yXSwBpQDGmiy_q2rMd2qzhLsq8JnXE3gonfo8k-1QZADxRz9KXw-mh6WJKnRAuCaWmBlUaXMu-NrejdwwcyaEElbfTI2eO-0VH4N_oj0sVc3tc4T4TQURwFrganZ_gCPIepq7ZhP88Q6VxRUojNEuERexICYWbpMd22WTeT-nYeHG7JQeTRhsL52amxVHD_XjvLWS2YuX-ojJ7GwMSyNNDkJ2wrXenrED0rDd9kyaLz1FY1wh9k1Uo-waTe8tOAqgRBWK88ZbS8qbDTFnXY0y24_7oJDVUU3GmlehLZF0L6QR9-peSB0MZ-ardJpxA8SCy6GwltDoqS64xgdwULRMCa5TjvxPhAvwG7Fo8nJZm6HXCGvBP9p_7S8dCzBwqdmyPKhNAACaBTgWFS0vIJSJqKU6JP-46GxjgTPkckV9A",
+        "hiddenPassword": "WRONG"
+      },
+      "type": "open-hidden-error"
+    },
+    {
+      "deterministic": {
+        "hiddenNonce": "494949494949494949494949",
+        "hiddenSalt": "48484848484848484848484848484848",
+        "nonce": "464646464646464646464646",
+        "paddingSeed": "4747474747474747474747474747474747474747474747474747474747474747",
+        "salt": "45454545454545454545454545454545"
+      },
+      "expectFragment": "AgECEEVFRUVFRUVFRUVFRUVFRUUMRkZGRkZGRkZGRkZGHp29hbJVy3vuXxmoWandRlqcjZnc4NLxju6IHs_jp7mu1vZStCfWVHxXOMNnu10KKmXPENtojGtciR5HDq-RbfSJitqKNwsij8AFfyARZ2sjuuJ440njnvNk7f6ZBTo-ynW2_IG-AOz0BnmxYNpL5hK-Ajt2nln6l1YRGVcdnx8m4-ilBJlAWf_8_84UG1agPinA_3ZI3T8EEqiXJlQviN5zqmJCZuoDDZcLkSaq9kE_HuHYxg3t1tiF6d3CJThaD-ukcuyXglEwbPYx2XqNWaEsBeMzLNJ0nubSMu900rkweUC4b-TjQLYiMGQcoGDc3XRrmXMyYLoxbScjSFSTDcp2EponAQ8KFPJTXFhRcU_4VQ7PIivAMF34V6eeIahy6ciJXeTwu7w6pyN3ImXGgHXJlTIcb1PK2iNSLhcMm5E9EwI-WSl-x24q33IhWfKEVvOVSvYOUjw-v9Yjoa6cmCapwUYR3qNgPvt1h3DgSFwbByDZkkV2UG_58mikFZ6vs0a9oFRboWZk_d2fr5kZOZmaKHFGFQfb8xERCZckNkrV81gHAD3T_X6K11z3Acdm_-NfdQaEt1M6qrfzrr49QFYXEaOzXxLfRyvIil0n-50LGScbE990dQWNE0JWOsMZ5m8s_6XoeoTyAurRs7UHwjsCPOFNKK1x2S9u9TSYGKQivSu-8T-vlu-WmG4CH2UJfLM1vZC8HagxVbVcEtZJIWcdEpjlI_MZNyfaNE-W2055lqHH2vQvertR9mWVTD_zX1Kh5WlrdtldJnxHlDb67o-LPyf57UZ-asMoVAOnwZFxl2f-aNHJ8_miKPThl8E8oImEBxJJfVWdAKM9TRXpoEwU5z7fJW7p8XzMjiMZakGruROjxSXDoTSFLQhYQZBesyiN7myKYb13S-11KUCxmew_jTtSYFDnHv42_G7IkbcOVJOg1CQlOIaXwdnQr8dY2KrExRZfuRjTTaFHvkkiOmjE9UaN0WOZyt5EiH0ow5hXi9bH-BBkHB7e9R0QhgHgIPjw_hRWtB7MrgoxhGR0IzZ6MCnNqTKjekBGELQFpIH5q1iwNjwlfUmLnnGIBrE2WtwnfiMfxGypU7Ihm7HOE0VEmAQw5Sw76hSysUIpgRxDfCTEIf4wfz_RzkoF-4-qKjutVBCneNLa7KGXnkJ4RyU-nF4lMA6B2xACGPoxPihF4A1_qflD3SUOQt1gRcDPiMBv4FDP-rqURQzxPN8lgLgPu7zPa8o1tbniBUXRpr4POML12uf9IQmTj9JQDrkpbEOh_anw492LP0Dkn1VT67byiELb2cliyyY-a6ptKw",
+      "expectOpen": {
+        "coverPassword": "cover-hunter",
+        "data": "hidden_secret_456",
+        "exp": 0,
+        "kind": 1
+      },
+      "input": {
+        "cover": {
+          "decoy": null,
+          "mode": "hidden",
+          "password": "cover-hunter"
+        },
+        "hidden": {
+          "data": "hidden_secret_456",
+          "expSecs": null,
+          "kind": 1
+        },
+        "hiddenPassword": "hidden-hunter",
+        "sizeClass": 1
+      },
+      "name": "deniable-hidden-cover-single",
+      "type": "deniable-roundtrip"
+    },
+    {
+      "expectError": "BAD_PASSWORD",
+      "name": "deniable-hidden-cover-single-wrong-hidden-password",
+      "open": {
+        "coverPassword": "cover-hunter",
+        "fragment": "AgECEEVFRUVFRUVFRUVFRUVFRUUMRkZGRkZGRkZGRkZGHp29hbJVy3vuXxmoWandRlqcjZnc4NLxju6IHs_jp7mu1vZStCfWVHxXOMNnu10KKmXPENtojGtciR5HDq-RbfSJitqKNwsij8AFfyARZ2sjuuJ440njnvNk7f6ZBTo-ynW2_IG-AOz0BnmxYNpL5hK-Ajt2nln6l1YRGVcdnx8m4-ilBJlAWf_8_84UG1agPinA_3ZI3T8EEqiXJlQviN5zqmJCZuoDDZcLkSaq9kE_HuHYxg3t1tiF6d3CJThaD-ukcuyXglEwbPYx2XqNWaEsBeMzLNJ0nubSMu900rkweUC4b-TjQLYiMGQcoGDc3XRrmXMyYLoxbScjSFSTDcp2EponAQ8KFPJTXFhRcU_4VQ7PIivAMF34V6eeIahy6ciJXeTwu7w6pyN3ImXGgHXJlTIcb1PK2iNSLhcMm5E9EwI-WSl-x24q33IhWfKEVvOVSvYOUjw-v9Yjoa6cmCapwUYR3qNgPvt1h3DgSFwbByDZkkV2UG_58mikFZ6vs0a9oFRboWZk_d2fr5kZOZmaKHFGFQfb8xERCZckNkrV81gHAD3T_X6K11z3Acdm_-NfdQaEt1M6qrfzrr49QFYXEaOzXxLfRyvIil0n-50LGScbE990dQWNE0JWOsMZ5m8s_6XoeoTyAurRs7UHwjsCPOFNKK1x2S9u9TSYGKQivSu-8T-vlu-WmG4CH2UJfLM1vZC8HagxVbVcEtZJIWcdEpjlI_MZNyfaNE-W2055lqHH2vQvertR9mWVTD_zX1Kh5WlrdtldJnxHlDb67o-LPyf57UZ-asMoVAOnwZFxl2f-aNHJ8_miKPThl8E8oImEBxJJfVWdAKM9TRXpoEwU5z7fJW7p8XzMjiMZakGruROjxSXDoTSFLQhYQZBesyiN7myKYb13S-11KUCxmew_jTtSYFDnHv42_G7IkbcOVJOg1CQlOIaXwdnQr8dY2KrExRZfuRjTTaFHvkkiOmjE9UaN0WOZyt5EiH0ow5hXi9bH-BBkHB7e9R0QhgHgIPjw_hRWtB7MrgoxhGR0IzZ6MCnNqTKjekBGELQFpIH5q1iwNjwlfUmLnnGIBrE2WtwnfiMfxGypU7Ihm7HOE0VEmAQw5Sw76hSysUIpgRxDfCTEIf4wfz_RzkoF-4-qKjutVBCneNLa7KGXnkJ4RyU-nF4lMA6B2xACGPoxPihF4A1_qflD3SUOQt1gRcDPiMBv4FDP-rqURQzxPN8lgLgPu7zPa8o1tbniBUXRpr4POML12uf9IQmTj9JQDrkpbEOh_anw492LP0Dkn1VT67byiELb2cliyyY-a6ptKw",
+        "hiddenPassword": "WRONG"
+      },
+      "type": "open-hidden-error"
     }
   ]
 }

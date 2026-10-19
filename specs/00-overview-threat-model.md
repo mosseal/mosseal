@@ -2,10 +2,9 @@
 
 **MOSSEAL** = **M**ostly **O**bfuscated **S**tateless **S**ystem for **E**nd-to-End **A**uthenticated **L**inks.
 
-A Rust→WASM + TypeScript library for sharing secret tokens / small app-state blobs through plain
-URLs (including QR codes) on static hosts (GitHub Pages etc.), with no backend.
+A `Rust → WASM` + `TypeScript` library for sharing secret tokens or small app-state blobs through plain URLs (including QR codes) on static hosts (such as GitHub Pages), with zero server or backend requirement.
 
-## Positioning (decided)
+## Positioning
 
 - **Default mode:** domain-bound obfuscated envelope (white-box cryptography). This is a *speed
   bump*, not mathematical secrecy. Anyone who reverses the wasm binary can decrypt password-less
@@ -17,11 +16,10 @@ URLs (including QR codes) on static hosts (GitHub Pages etc.), with no backend.
   (URL host, chat logs, server logs, link-preview bots) has "zero knowledge" of the payload —
   that is the extent of the claim.
 
-## Scope (v1)
+## Scope
 
 Library + CLI + tests. The core risk this project addresses is cross-target correctness —
-native Rust, Node-wasm, and browser-wasm must produce and open identical links. A demo
-application is not part of v1.
+native Rust, Node-wasm, and browser-wasm must produce and open identical links.
 
 ## What the system defends against
 
@@ -33,6 +31,14 @@ application is not part of v1.
 | Offline password brute-force | n/a | ⚠️ Slowed by Argon2id only |
 | DevTools inspection at time of token *use* | ❌ Out of scope | ❌ Out of scope |
 | Link revocation / replay prevention | ❌ Bearer credential; expiry + key epoch are the only mitigations | same |
+
+### v2 adversary classes (multi & deniable modes)
+
+| Adversary | What they hold | What they get |
+|---|---|---|
+| Binary holder without any password | reversed wasm + a `MULTI` link | the slot count and ciphertext sizes only; no slot content (each slot is Argon2id-keyed) |
+| Binary holder + a deniable `cover=plain` link | reversed wasm + cover | the cover payload: opaque bytes. The hidden envelope's **existence** is visible; its content is not (spec 09 § residual leaks) |
+| Cover holder under coercion | the cover password (mode=hidden) | the cover secret only; they can neither confirm nor exclude a hidden layer — plausible deniability, not proof of absence |
 
 ## Honest limitations (must appear in README)
 
@@ -46,6 +52,12 @@ application is not part of v1.
 5. Links are bearer credentials: no revocation, replay is inherent.
 6. Expiry enforcement is client-side; see `07-time-enforcement.md` for the clock-spoofing
    analysis.
+7. **Deniability is plausible, not provable** (spec 09 § residual leaks): an examiner who
+   knows the format can never exclude a hidden layer; `cover=plain` openly shows the hidden
+   envelope's existence as opaque bytes; hidden `MULTI` layers are single-locator (only the
+   hidden-password holder can find them).
+8. **Multi-secret links leak slot count and sizes** (structural metadata inside the outer
+   envelope); slot content and which password matched which slot do not leak.
 
 ## Architecture summary
 
@@ -66,7 +78,7 @@ application is not part of v1.
 
 | File | Component |
 |---|---|
-| `01-envelope-format.md` | URL fragment layout, binary payload schema, base64url encoding |
+| `01-envelope-format.md` | URL fragment layout, binary payload schema, base64url encoding, v2 commitment + MULTI kind |
 | `02-crypto-core.md` | Rust workspace: core crypto, AES-GCM, Argon2id, zeroization, key epochs |
 | `03-domain-binding.md` | Hostname whitelist model and KDF binding string |
 | `04-ts-wrapper.md` | TypeScript API surface, Node/browser loading, IndexedDB handoff |
@@ -74,3 +86,4 @@ application is not part of v1.
 | `06-packaging-ci.md` | npm package layout, consumer CI pipeline, GitHub Pages notes |
 | `07-time-enforcement.md` | Expiry, multi-source HTTP time, strict/lenient modes |
 | `08-testing-conformance.md` | Cross-target test vectors, CI matrix, fuzzing |
+| `09-deniability.md` | Deniable links: cover modes, offset scheme, size classes, honest limits |

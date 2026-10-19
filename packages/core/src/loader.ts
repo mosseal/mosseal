@@ -28,9 +28,26 @@ export interface WasmMosseal {
     expSecs: number | null | undefined,
     kind: number | null | undefined
   ): string;
+  /** Multi-secret seal (spec 04 § multi): slots as a JSON-serializable array. */
+  sealMulti(
+    slots: unknown,
+    expSecs: number | null | undefined
+  ): string;
+  /** Deniable seal (spec 09): cover + hidden config objects, size class in KiB. */
+  sealDeniable(
+    cover: unknown,
+    hidden: unknown,
+    sizeClass: number | null | undefined
+  ): string;
   open(
     link: string,
     password: string | null | undefined
+  ): Promise<{ data: string; exp: number; kind: number }>;
+  /** Deniable open (spec 09): cover open + hidden-layer recovery. */
+  openHidden(
+    link: string,
+    coverPassword: string | null | undefined,
+    hiddenPassword: string | null | undefined
   ): Promise<{ data: string; exp: number; kind: number }>;
 }
 

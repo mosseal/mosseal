@@ -34,13 +34,19 @@ export async function installHarness(wasmMod, wasmUrl) {
       hostname: () => location.hostname,
       href: () => location.href,
 
-      /** Seal → bare fragment value (part after `#ms=`). */
+      /** Seal → bare fragment value (part after `#ms=`).
+       * v2: `opts.slots` selects the multi-secret path (spec 04 § multi). */
       sealFragment: (opts) => mosseal.sealFragment(opts),
       /** Seal → full share URL (fragment replaces any existing one). */
       sealUrl: (opts) => mosseal.generateShareUrl(opts),
 
+      /** v2: deniable seal → bare fragment (spec 09). */
+      sealDeniable: (opts) => mosseal.sealDeniableFragment(opts),
+
       openUrl: (url, opts) => attempt(() => mosseal.openFromUrl(url, opts)),
       openFragment: (fragment, opts) => attempt(() => mosseal.openFragment(fragment, opts)),
+      /** v2: deniable hidden-layer open (explicit-only, spec 09). */
+      openHidden: (fragment, opts) => attempt(() => mosseal.openHiddenFragment(fragment, opts)),
 
       // URL helpers are module-level exports (spec 04), re-exported via the
       // `MossealUrl` namespace object — not instance methods.

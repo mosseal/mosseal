@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "mosseal-admin-wasm"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "base64",
  "console_error_panic_hook",
@@ -690,13 +690,14 @@ dependencies = [
  "mosseal-core",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "mosseal-cli"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -706,11 +707,13 @@ dependencies = [
  "predicates",
  "rand 0.10.3",
  "rpassword",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "mosseal-core"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "aes-gcm 0.11.1",
  "argon2",
@@ -725,8 +728,9 @@ dependencies = [
 
 [[package]]
 name = "mosseal-vectors"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
+ "aes-gcm 0.11.1",
  "base64",
  "hex",
  "mosseal-core",
@@ -735,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "mosseal-wasm"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "console_error_panic_hook",
  "getrandom 0.2.17",

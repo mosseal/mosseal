@@ -41,6 +41,8 @@ pub enum ErrorCode {
     StrictTimeUnavailable,
     #[error("epoch retired")]
     EpochRetired,
+    #[error("too many slots")]
+    TooManySlots,
     #[error("wasm init failed")]
     WasmInitFailed,
 }
@@ -63,20 +65,30 @@ impl ErrorCode {
             ErrorCode::Expired => "EXPIRED",
             ErrorCode::StrictTimeUnavailable => "STRICT_TIME_UNAVAILABLE",
             ErrorCode::EpochRetired => "EPOCH_RETIRED",
+            ErrorCode::TooManySlots => "TOO_MANY_SLOTS",
             ErrorCode::WasmInitFailed => "WASM_INIT_FAILED",
         }
     }
 }
 
-/// Max `data` bytes permitted in v1 envelopes (u32 length prefix, spec 01).
+/// Max `data` bytes permitted in envelopes (u32 length prefix, spec 01).
 ///
 /// The wire format itself allows up to `u32::MAX`, but this cap keeps links
 /// within practical URL/QR budgets. The URL layer additionally warns (advisory,
 /// not an error) once the final share URL exceeds 512 bytes.
 pub const MAX_PAYLOAD_BYTES: usize = 4096;
 
-/// Envelope format version byte for v1 (spec 01).
-pub const ENVELOPE_VERSION: u8 = 1;
+/// Envelope format version byte for v2 seals (spec 01).
+///
+/// v2 prefixes the AEAD plaintext with a 16-byte key commitment
+/// (`mosseal/v2`-domain SHA-256 over the derived key); seals always emit v2,
+/// while `envelope::decode` accepts versions `1..=2` so every v1 link keeps
+/// opening (permanent read path).
+pub const ENVELOPE_VERSION: u8 = 2;
+
+/// Oldest envelope version still openable (v1 links are read-compatible
+/// forever; seals are v2-only).
+pub const MIN_OPEN_VERSION: u8 = 1;
 
 /// A top-level error carrying a stable code plus optional detail.
 #[derive(Debug, thiserror::Error)]
@@ -116,9 +128,10 @@ mod tests {
             (ErrorCode::Expired, "EXPIRED"),
             (ErrorCode::StrictTimeUnavailable, "STRICT_TIME_UNAVAILABLE"),
             (ErrorCode::EpochRetired, "EPOCH_RETIRED"),
+            (ErrorCode::TooManySlots, "TOO_MANY_SLOTS"),
             (ErrorCode::WasmInitFailed, "WASM_INIT_FAILED"),
         ];
-        assert_eq!(cases.len(), 10, "all taxonomy codes are covered");
+        assert_eq!(cases.len(), 11, "all taxonomy codes are covered");
         for (code, expected) in cases {
             assert_eq!(code.as_str(), expected, "code {code:?} string drifted");
         }

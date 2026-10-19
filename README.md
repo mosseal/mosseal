@@ -2,7 +2,7 @@
 
 **M**ostly **O**bfuscated **S**tateless **S**ystem for **E**nd-to-End **A**uthenticated **L**inks.
 
-A Rust→WASM + TypeScript library for sharing secret tokens or small app-state blobs through plain URLs (including QR codes) on static hosts (such as GitHub Pages), with zero server or backend requirement.
+A `Rust → WASM` + `TypeScript` library for sharing secret tokens or small app-state blobs through plain URLs (including QR codes) on static hosts (such as GitHub Pages), with zero server or backend requirement.
 
 ## Why?
 
@@ -13,9 +13,10 @@ It is **not** a replacement for TLS, PKI, or any other cryptographic protocol. I
 
 ## Threat Model & Security Guarantees
 
-- **Default mode (no password):** Domain-bound obfuscated envelope (white-box cryptography). This is a **speed bump**, not mathematical secrecy. Anyone with access to the client wasm binary and the link can reverse the binary to extract the secret and decrypt offline.
+- **Default mode (no password):** Domain-bound obfuscated envelope (white-box cryptography). This is a **speed bump**, not mathematical secrecy. Anyone with access to the client wasm binary and the link *can* reverse the binary to extract the secret and decrypt offline (with some effort).
 - **Optional password mode:** Argon2id-derived key upgrade. With a password, confidentiality is real and proportional to password strength × Argon2 compute cost; the binary contributes environment binding and salt compartmentalization.
-- **Not a Zero-Knowledge Proof:** MOSSEAL is not a zero-knowledge proof. The transport medium (URL host, static CDN, server access logs, link-preview crawlers) receives zero knowledge of the payload because the ciphertext resides exclusively in the URL fragment (`#ms=...`).
+- **Multi-secret links (v2):** N secrets under N independent passwords in one link — each slot runs its own Argon2id (never a shared derive), so one password holder cannot read another slot. Open tries slots in order with the caller's password; all failing yields `BAD_PASSWORD` with no indication about which slot almost matched.
+- **Deniable links (v2):** A cover link hiding a complete hidden envelope at a password-derived offset, padded to a fixed size class (1/2/4 KiB) — the VeraCrypt model as layered AEAD, **not** polymorphic encryption. `cover=hidden` requires both passwords (hidden receiver); `cover=plain` needs only the hidden password but shows the hidden envelope's *existence* to binary holders.
 
 ### Threat Matrix
 
@@ -37,6 +38,8 @@ It is **not** a replacement for TLS, PKI, or any other cryptographic protocol. I
 4. **Domain binding is client-enforced:** Domain binding gates execution against `window.location.hostname` in browser builds and binds the sorted whitelist into KDF derivation. However, runtime checks in the browser can be bypassed by patching WebAssembly or tampering with browser globals.
 5. **Links are bearer credentials:** There is no centralized database or revocation authority. Key epoch rotation and payload expiration are the only revocation-adjacent mechanisms.
 6. **Expiry enforcement:** Expiring links query multi-source CORS-compatible internet time (Cloudflare trace, TimeAPI, WorldTimeAPI) to prevent system clock manipulation. If network time is unavailable, lenient mode falls back to local clock while strict mode refuses to decrypt.
+7. **Deniability is plausible, not provable**: an examiner who knows the format can never *exclude* a hidden layer — wrong hidden password and absent layer both fail with `BAD_PASSWORD`. `cover=plain` openly shows the hidden envelope's *existence* as opaque bytes (content stays protected). Hidden `MULTI` layers are single-locator: only the hidden-password holder can find the layer; other slot holders need it too.
+8. **Multi-secret links leak slot count and sizes** (structural metadata); slot content and password-to-slot mapping do not leak. Open performs up to N Argon2 derives (~30–60 ms each in wasm at the `minimum` profile).
 
 
 ## Architecture & Components
@@ -51,7 +54,7 @@ mosseal/
 ├── packages/
 │   ├── mosseal/         # Node.js CLI builder (`mosseal init`, `build`, `rotate`, `doctor`)
 │   └── core/            # TypeScript runtime wrapper (`@mosseal/core`), URL fragment parser, loader
-└── specs/               # Normative technical specifications (00 through 08)
+└── specs/               # Normative technical specifications (00 through 09)
 ```
 
 ### Build & Distribution Flow

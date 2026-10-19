@@ -50,13 +50,53 @@ const result = await seal.openFromUrl(location.href, { password? });
 | `"token"` | `0x01` | A secret token / credential (default). |
 | `"binary_blob"` | `0x02` | A small app-state blob (subject to the `MAX_PAYLOAD_BYTES` cap). |
 
-Both are supported v1 kinds. An unknown kind byte on open → `UNSUPPORTED_KIND`.
+`"multi"` (`0x03`) is v2-only and has no direct TS string kind — it is produced by
+`sealFragment({ slots })` and opens through the normal `openFragment` with any slot's
+password. An unknown kind byte on open → `UNSUPPORTED_KIND`.
+
+### Multi-secret sealing (v2, spec 01 § MULTI kind)
+
+```ts
+const fragment = seal.sealFragment({
+  slots: [
+    { password: "pw-one", data: "secret_one", kind: "token" },
+    { password: "pw-two", data: "secret_two", kind: "binary_blob", expSecs: 3600 },
+  ],
+  expSecs?: 0, // default expiry for slots that omit their own
+});
+// open with any slot's password:
+const out = await seal.openFragment(fragment, { password: "pw-two" });
+```
+
+Setting `slots` replaces `data`/`password`/`kind` for the seal (both at once is a
+`MALFORMED_ENVELOPE` caller error). `SealOptions.data` is optional when `slots` is provided.
+
+### Deniable sealing & hidden open (v2, spec 09)
+
+```ts
+const fragment = seal.sealDeniableFragment({
+  cover: { mode: "hidden", password: "cover-pw", decoy?: "plausible bytes" },
+  hidden: { password: "hidden-pw", data: "hidden_secret" },   // or { password, slots: [...] }
+  sizeClass?: 1 | 2 | 4,   // KiB; omitted = smallest class that fits
+});
+const shareUrl = seal.generateDeniableShareUrl({ cover, hidden });  // full URL variant
+
+// Explicit-only hidden access (a normal open never probes for hidden layers):
+const out = await seal.openHiddenFragment(fragment, {
+  coverPassword: "cover-pw",       // mode=hidden only
+  hiddenPassword: "hidden-pw",
+});
+```
+
+Hidden `MULTI` requires `hidden.password` to equal one slot's password (that slot's holder
+locates and opens the layer — see spec 09 § honest limitations). Deniable links are exempt
+from the 512-byte QR advisory (the fixed size class is the statement).
 
 ### `MossealError` codes (mirrors wasm taxonomy exactly)
 
 `MALFORMED_ENVELOPE`, `UNSUPPORTED_VERSION`, `UNSUPPORTED_KIND`, `PAYLOAD_TOO_LARGE`,
 `DOMAIN_MISMATCH`, `BAD_PASSWORD`, `EXPIRED`, `STRICT_TIME_UNAVAILABLE`, `EPOCH_RETIRED`,
-`WASM_INIT_FAILED`.
+`TOO_MANY_SLOTS`, `WASM_INIT_FAILED`.
 
 The wrapper adds user-presentable default messages per code so apps don't string-match.
 

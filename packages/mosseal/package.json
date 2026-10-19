@@ -1,6 +1,6 @@
 {
   "name": "@mosseal/cli",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "CLI builder for MOSSEAL: validates env, injects secrets via Rust codegen, and compiles the per-consumer wasm (spec 05).",
   "type": "module",
   "bin": {

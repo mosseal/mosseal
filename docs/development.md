@@ -66,6 +66,32 @@ cargo deny --all-features check && cargo machete   # needs cargo-deny / cargo-ma
 JS/TS packages and the browser suite are documented in the root
 [`README.md`](../README.md#development--testing).
 
+After changing `crates/mosseal-core`, the derived wasm fixtures go stale — refresh them
+(and the conformance fixture) before running the JS suites:
+
+```bash
+node scripts/sync-core-crate.mjs                       # re-vendor the core crate
+node scripts/sync-admin-wasm.mjs                       # rebuild the admin wasm
+node packages/core/test/build-conformance-wasm.mjs --force
+```
+
+## v2 cost notes (multi & deniable)
+
+- **Argon2 derives** dominate cost at the `minimum` profile (~30–60 ms each in wasm,
+  ~native parity in the CLI):
+  - `MULTI` seal: exactly `slot_count` derives; open: up to `slot_count` (stops at the
+    first verified slot). The cap (4 default, 8 via `MOSSEAL_MULTI_MAX_SLOTS=8`) bounds
+    the worst case.
+  - Deniable seal: one derive per hidden slot + one offset derive (+ one cover derive in
+    `cover=hidden`). Hidden open: one offset derive + the hidden envelope's derives.
+- **URL sizes**: single links stay well under the 512-byte QR advisory. A `MULTI` link
+  grows with the slot count (roughly 100 B + ~70 B per slot plus each secret). Deniable
+  links are pinned to their size class: 1/2/4 KiB binary ≈ 1.4/2.7/5.5 KB base64url —
+  **over the QR advisory by design**; they are URL/clipboard/NFC transport, and the
+  wrapper's advisory deliberately does not apply to them (spec 09).
+- **Memory**: each Argon2id derive allocates the profile's memory cost (19 MiB at
+  `minimum`) transiently; derives are sequential, so peak usage is one derive at a time.
+
 ## CI & Publishing
 
 ### Repository CI (`.github/workflows/ci.yml`)

@@ -25,7 +25,8 @@ interface ConformanceMosseal {
     kind: number | null,
     saltHex: string,
     nonceHex: string,
-    epoch?: number | null
+    epoch?: number | null,
+    version?: number | null
   ): string;
 }
 

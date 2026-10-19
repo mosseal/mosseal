@@ -35,6 +35,27 @@ Rules:
 - Argon2 vectors use `minimum` profile only (interactive profile verified separately with a
   timing assertion, not byte vectors, since params are compile-time).
 
+### v2 vector set (spec 01 § v2 / MULTI, spec 09)
+
+- **v1 regression vectors are pinned to `"version": 1`** and their fragments are
+  **byte-identical forever** — the drift tripwire doubles as the v1 read-compat proof
+  (a `v1-fragments-open-on-v2` native test re-opens every v1 vector through the v2-capable
+  code).
+- v2 single roundtrips (nopass / password / exp / epoch>0) reproduce byte-exactly via the
+  conformance `sealDeterministic` version pin.
+- A **commitment-tamper** error vector: a hand-forged v2 envelope whose AEAD is valid but
+  whose plaintext omits the key-commitment prefix must fail with `MALFORMED_ENVELOPE`.
+- `multi-roundtrip` vectors (deterministic per-slot salts/nonces + outer hooks) reproduce
+  byte-exactly natively; the Node suite re-opens the recorded fragments through the wasm
+  multi path (receiver-side conformance — seal reproduction stays native-gated) and runs a
+  functional `sealMulti` → open-per-slot roundtrip with the vector clock.
+- `deniable-roundtrip` vectors (both cover modes, deterministic padding seed + hidden
+  hooks) reproduce byte-exactly natively; the Node suite re-opens via `openHidden` and runs
+  a functional `sealDeniable` → `openHidden` roundtrip, asserting the exact size class.
+- `open-hidden-error` vectors (wrong hidden password → `BAD_PASSWORD`) and a
+  `seal-multi-error` vector (slot count > cap → `TOO_MANY_SLOTS`) complete the taxonomy
+  coverage.
+
 ## Timing assertions
 
 - Argon2id derive (wasm, `minimum` profile): the **memory-hard path must dominate

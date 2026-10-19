@@ -23,13 +23,20 @@ links can be sealed/opened without a Rust toolchain:
 ```
 mosseal gen-secret      # print a fresh 32-byte base64url epoch secret
 mosseal seal <token>    # seal a token into a share-link fragment
+mosseal seal-multi      # seal N password-keyed secrets into one MULTI link (v2)
+mosseal seal-deniable   # seal a cover link hiding a hidden layer (v2, spec 09)
 mosseal open <fragment> # open and verify a fragment
 ```
 
-Flags: `--epochs <s;e;c>` / `--domains <a,b>` (fall back to `MOSSEAL_EPOCHS` /
+Flags: `--epochs <s;e;c>` / `--domains <a,b>` (fall back to `MOSSEAL_EPOCHS` /`
 `MOSSEAL_ALLOWED_DOMAINS`, then to the `.env` slots), `--password <pw>` (bare `--password`
 prompts on a TTY with echo off), `--exp <unix-secs>` and `--kind <token|binary_blob>`
-(seal), `--ignore-expiry` (open).
+(seal), `--ignore-expiry` (open). Multi/deniable flags: `--slot <PASSWORD=SECRET>`
+(repeatable) / `--slots-file <json>`, `--hidden-slot` / `--hidden-slots-file`,
+`--cover-mode <hidden|plain>` (default `hidden`; `--cover-password` prompts when omitted),
+`--cover-decoy <bytes>`, `--hidden-password <pw>` (defaults to the first hidden slot's
+password; on `open` its presence selects the deniable path, with `--password` opening the
+cover), and `--size-class <1|2|4>`.
 
 These mirror `mosseal-cli`'s trusted-path semantics exactly: `runtime_hostname: None`
 (spec 03 — the CLI skips the runtime host gate) and `TimeMode::Lenient` with a no-network
@@ -40,13 +47,16 @@ precompiled admin wasm (`crates/mosseal-admin-wasm`, shipped in `vendor/admin-wa
 The two admin surfaces are deliberately interchangeable:
 
 - **Envelope bytes** are identical (same core, same sealing epoch = latest active).
-- **stdout** is identical for `open` (`kind: N` / `exp:  N` / `data: ...`) and `seal`
-  (the bare fragment); `gen-secret` prints a 43-char base64url secret.
+- **stdout** is identical for `open` (`version: N` / `kind: N` / `exp:  N` / `data: ...` —
+  the `version:` line is the CLI-only envelope-version exposure, decision D9) and `seal` /
+  `seal-multi` / `seal-deniable` (the bare fragment); `gen-secret` prints a 43-char
+  base64url secret.
 - **Errors** are identical: `Error: <CODE>: <detail>` on stderr, exit `1`
   (e.g. `Error: BAD_PASSWORD: gcm tag mismatch`). This replaced the native CLI's
   old `Error: <lowercase prose>` — the stable code is now always the prefix.
 - **Flags** match: `--epochs`, `--domains`, `--password`, `--exp`, `--kind
-  <token|binary-blob>`, `--ignore-expiry`. `--password` takes an optional value
+  <token|binary-blob>`, `--ignore-expiry`, plus the multi/deniable flags above.
+  `--password` takes an optional value
   (bare `--password` prompts with echo off). Errors
 print the stable machine-readable code (e.g. `BAD_PASSWORD`, `EXPIRED`) and exit non-zero.
 

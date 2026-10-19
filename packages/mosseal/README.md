@@ -18,7 +18,7 @@ npm install -D @mosseal/cli
 npm install @mosseal/core
 ```
 
-New versions are published under the **`next` dist-tag** first, so `npm install
+New preview versions are published under the **`next` dist-tag** first, so `npm install
 @mosseal/cli` keeps resolving to the previous stable release until the GitHub Release is
 published (which promotes `next` → `latest`). To opt into a version under review:
 

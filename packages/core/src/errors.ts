@@ -14,6 +14,7 @@ export enum MossealErrorCode {
   Expired = "EXPIRED",
   StrictTimeUnavailable = "STRICT_TIME_UNAVAILABLE",
   EpochRetired = "EPOCH_RETIRED",
+  TooManySlots = "TOO_MANY_SLOTS",
   WasmInitFailed = "WASM_INIT_FAILED",
 }
 
@@ -37,6 +38,8 @@ const DEFAULT_MESSAGES: Record<MossealErrorCode, string> = {
     "requires a trusted time check.",
   [MossealErrorCode.EpochRetired]:
     "This link was sealed with a revoked key and can no longer be opened.",
+  [MossealErrorCode.TooManySlots]:
+    "This link carries more secrets than the maximum supported.",
   [MossealErrorCode.WasmInitFailed]:
     "Failed to initialize the security module. Try reloading the page.",
 };

@@ -76,11 +76,49 @@ in the conformance suite.
 
 Use RustCrypto `argon2` 0.6 crate with `hash_password_into` (raw, not the PHC-string API).
 
+The KDF constructions are **unchanged in v2** (decision D1): v2 reuses the v1 HKDF and Argon2id
+paths verbatim. Password-less v2 links remain binary-readable exactly as v1 password-less links
+are today — a documented, unchanged trade-off; migrate via epoch rotation.
+
+### MULTI slot key derivation (v2, spec 01 § MULTI kind)
+
+Each slot runs its **own independent** Argon2id over its own fresh salt:
+
+```
+slot_key_i = Argon2id(binding || 0x1F || INTERNAL_SECRET || 0x1F || password_i,
+                      slot_salt_i, m, t, p, len=32)
+```
+
+**Never** derive one Argon2 output and slice it into N keys — slicing would let any single
+password holder derive all slot keys and destroy slot isolation. The slot cap (`MAX_SLOTS`,
+default 4, compile-time override `MOSSEAL_MULTI_MAX_SLOTS=8`) bounds the open-time Argon2 cost:
+open derives per slot in order and stops at the first verified hit.
+
+### Deniable offset derivation (v2, spec 09)
+
+The hidden-envelope offset uses the same Argon2id machinery with a **dedicated domain tag**
+occupying the secret slot, and **no epoch secret** (the locating receiver holds only the hidden
+password; the binary supplies the binding):
+
+```
+arg  = Argon2id(binding || 0x1F || "mosseal/v2/offset" || 0x1F || hidden_password,
+                cover_salt, m, t, p, len=32)
+```
+
+`arg[0..4]` drives the envelope offset, `arg[4..8]` masks the length prefix (spec 09).
+
 ## Cipher
 
 AES-256-GCM (RustCrypto `aes-gcm` 0.11), 12-byte nonce, 16-byte tag appended (default crate
 behavior). AAD = the envelope header bytes `[version|flags|key_epoch|salt|nonce]` — binds
 metadata into the tag so header tampering fails before payload parsing.
+
+### Key commitment (v2)
+
+The v2 AEAD plaintext is prefixed with `key_commit = SHA-256("mosseal/v2" || key)[0..16]`
+(spec 01). The commitment is verified before payload parsing and a mismatch takes the same
+error path as a tag failure. MULTI slots and deniable layers each carry their own commitment
+over their own key.
 
 ## Key epochs (rotation)
 
@@ -147,17 +185,44 @@ impl Mosseal {
         kind: Option<u8>,
     ) -> Result<String, JsError>;
 
+    /// Multi-secret seal (spec 01 § MULTI): `slots` is a JSON array of
+    /// `{ password, data, kind?, expSecs? }`.
+    #[wasm_bindgen(js_name = sealMulti)]
+    pub fn seal_multi(&self, slots: JsValue, exp_secs: Option<f64>) -> Result<String, JsError>;
+
+    /// Deniable seal (spec 09): cover/hidden config objects + optional size
+    /// class (1 | 2 | 4 KiB).
+    #[wasm_bindgen(js_name = sealDeniable)]
+    pub fn seal_deniable(
+        &self,
+        cover: JsValue,
+        hidden: JsValue,
+        size_class: Option<u8>,
+    ) -> Result<String, JsError>;
+
     #[wasm_bindgen]
     pub async fn open(
         &self,
         link: String,
         password: Option<String>,
     ) -> Result<JsValue, JsError>;
+
+    /// Deniable hidden-layer open (spec 09).
+    #[wasm_bindgen(js_name = openHidden)]
+    pub async fn open_hidden(
+        &self,
+        link: String,
+        cover_password: Option<String>,
+        hidden_password: Option<String>,
+    ) -> Result<JsValue, JsError>;
 }
 
 #[wasm_bindgen]
 pub fn register_time_fetcher(fetch: js_sys::Function);
 ```
+
+The open-result JS shape is unchanged in v2 (`{ data, exp, kind }` — no `version` field; the
+CLI is the only surface that prints it, decision D9).
 
 `JsError` messages are **stable, machine-readable codes** from the shared error taxonomy
 (`spec 01` + below), not free-form prose.
@@ -173,6 +238,7 @@ pub fn register_time_fetcher(fetch: js_sys::Function);
 | `EXPIRED` | time check |
 | `STRICT_TIME_UNAVAILABLE` | strict mode, net time unreachable |
 | `EPOCH_RETIRED` | epoch byte not in registry |
+| `TOO_MANY_SLOTS` | seal-time: multi slot count exceeds `MAX_SLOTS` |
 | `WASM_INIT_FAILED` | wasm init / module load failure (spec 04) |
 
 Panic hygiene: use `console_error_panic_hook` so a panic surfaces as a JS exception rather than

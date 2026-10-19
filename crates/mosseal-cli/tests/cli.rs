@@ -233,6 +233,215 @@ fn errors_use_the_stable_code_prefix() {
 }
 
 #[test]
+fn open_prints_version_line() {
+    // D9: version exposure is CLI-only. Fresh seals are v2.
+    let s = secret(7);
+    let sealed = mosseal()
+        .args(["seal", "tok_v2", "--epochs", &s, "--domains", "a.test"])
+        .assert()
+        .success();
+    let frag = String::from_utf8(sealed.get_output().stdout.clone())
+        .unwrap()
+        .trim()
+        .to_string();
+
+    mosseal()
+        .args(["open", &frag, "--epochs", &s, "--domains", "a.test"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("version: 2"))
+        .stdout(predicate::str::contains("data: tok_v2"));
+}
+
+#[test]
+fn seal_multi_roundtrip_and_wrong_password() {
+    let s = secret(8);
+    let sealed = mosseal()
+        .args([
+            "seal-multi",
+            "--slot",
+            "pw-one=secret_one",
+            "--slot",
+            "pw-two=secret_two",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success();
+    let frag = String::from_utf8(sealed.get_output().stdout.clone())
+        .unwrap()
+        .trim()
+        .to_string();
+
+    // Either password opens its own slot.
+    mosseal()
+        .args([
+            "open",
+            &frag,
+            "--password",
+            "pw-two",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("data: secret_two"))
+        .stdout(predicate::str::contains("version: 2"));
+
+    // Wrong password fails with the stable code.
+    mosseal()
+        .args([
+            "open",
+            &frag,
+            "--password",
+            "WRONG",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("BAD_PASSWORD"));
+}
+
+#[test]
+fn seal_multi_requires_at_least_one_slot() {
+    let s = secret(9);
+    mosseal()
+        .args(["seal-multi", "--epochs", &s, "--domains", "a.test"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn seal_deniable_hidden_open_flow() {
+    let s = secret(10);
+    let sealed = mosseal()
+        .args([
+            "seal-deniable",
+            "--cover-mode",
+            "plain",
+            "--hidden-slot",
+            "hpw=hidden_secret",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success();
+    let frag = String::from_utf8(sealed.get_output().stdout.clone())
+        .unwrap()
+        .trim()
+        .to_string();
+    // 1 KiB size class → ~1368 b64 chars (small hidden envelope).
+    assert!(frag.len() > 1000, "deniable links are size-class padded");
+
+    // Hidden open recovers the secret.
+    mosseal()
+        .args([
+            "open",
+            &frag,
+            "--hidden-password",
+            "hpw",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("data: hidden_secret"))
+        .stdout(predicate::str::contains("version: 2"));
+
+    // Wrong hidden password fails with BAD_PASSWORD.
+    mosseal()
+        .args([
+            "open",
+            &frag,
+            "--hidden-password",
+            "WRONG",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("BAD_PASSWORD"));
+
+    // A normal open just shows the opaque cover blob (kind 2), no secret.
+    mosseal()
+        .args(["open", &frag, "--epochs", &s, "--domains", "a.test"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("kind: 2"))
+        .stdout(predicate::str::contains("hidden_secret").not());
+}
+
+#[test]
+fn seal_deniable_cover_hidden_flow() {
+    let s = secret(11);
+    let sealed = mosseal()
+        .args([
+            "seal-deniable",
+            "--cover-password",
+            "cover-pw",
+            "--hidden-slot",
+            "hpw=hidden_secret",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success();
+    let frag = String::from_utf8(sealed.get_output().stdout.clone())
+        .unwrap()
+        .trim()
+        .to_string();
+
+    // Default cover mode is hidden: opening the cover requires its password.
+    mosseal()
+        .args([
+            "open",
+            &frag,
+            "--hidden-password",
+            "hpw",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("BAD_PASSWORD"));
+
+    // With both passwords the hidden layer opens.
+    mosseal()
+        .args([
+            "open",
+            &frag,
+            "--password",
+            "cover-pw",
+            "--hidden-password",
+            "hpw",
+            "--epochs",
+            &s,
+            "--domains",
+            "a.test",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("data: hidden_secret"));
+}
+
+#[test]
 fn help_and_version_succeed() {
     mosseal()
         .arg("--help")
@@ -240,6 +449,8 @@ fn help_and_version_succeed() {
         .success()
         .stdout(predicate::str::contains("seal"))
         .stdout(predicate::str::contains("open"))
+        .stdout(predicate::str::contains("seal-multi"))
+        .stdout(predicate::str::contains("seal-deniable"))
         .stdout(predicate::str::contains("gen-secret"));
 
     mosseal()

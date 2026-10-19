@@ -58,6 +58,11 @@ rather than falling back.
   fully offline-capable).
 - Grace: none in v1 (no `nbf`/skew window). A 30 s accept-skew on `>` comparisons is applied to
   tolerate source clock jitter.
+- **v2 per-slot expiry (spec 01 § MULTI kind):** each `MULTI` slot's `exp` is enforced after
+  that slot's decrypt (same semantics per slot; `exp = 0` slots stay offline-capable). The
+  outer `MULTI` envelope's `exp` is structural `0` and never checked. Deniable covers
+  likewise carry `exp = 0`; hidden layers enforce their own `exp`, and the admin
+  `--ignore-expiry` path skips it at both layers (spec 09 § open flows).
 
 ## API surface in wasm
 

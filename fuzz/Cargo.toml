@@ -25,6 +25,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "hidden_extract"
+path = "fuzz_targets/hidden_extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "open"
 path = "fuzz_targets/open.rs"
 test = false
